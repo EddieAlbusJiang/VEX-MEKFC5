@@ -3,28 +3,42 @@
 /*    Module:       main.cpp                                                  */
 /*    Author:       Eddie                                                     */
 /*    Created:      9/15/2026, 11:06:43 PM                                    */
-/*    Description:  V5 project                                                */
+/*    Description:  V5 project (MEKFC5, X-drive)                              */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
+#include "autonomous.h"
+#include "driver-control.h"
+#include "instance.h"
 #include "vex.h"
 
-using namespace vex;
+void initialize() {
+    // Controller and brain startup message.
+    Controller.Screen.clearScreen();
+    Controller.Screen.setCursor(1, 1);
+    Controller.Screen.print("MEKFC5 ready");
 
-// A global instance of vex::brain used for printing to the V5 brain screen
-vex::brain       Brain;
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("MEKFC5 ready");
 
-// define your global instances of motors and other devices here
+    printf("MEKFC5 ready\n");
 
+    // Calibrate the inertial sensor until it reports a stable reading.
+    while (!Heading_Tracker.calibrate()) {
+        vex::this_thread::sleep_for(10);
+    }
+}
 
 int main() {
+    initialize();
 
-    Brain.Screen.printAt( 10, 50, "Hello V5" );
-   
-    while(1) {
-        
-        // Allow other tasks to run
-        this_thread::sleep_for(100);
-        // printf("[%d]test logging to console", time(NULL));
-        Brain.Screen.printAt( 10, 50, "Hello V5 %d", time(NULL));
+    // Register the competition callbacks.
+    Competition.autonomous(autonomous);
+    Competition.drivercontrol(driverControl);
+
+    // Keep the program alive so competition control can dispatch callbacks.
+    while (true) {
+        vex::this_thread::sleep_for(10);
     }
+    return 0;
 }
