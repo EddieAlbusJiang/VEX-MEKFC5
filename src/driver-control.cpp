@@ -1,4 +1,5 @@
 #include "driver-control.h"
+#include "HiDebug.h"
 
 namespace {
 // Ignore small joystick noise near the center.
@@ -6,6 +7,7 @@ constexpr double kDeadZone = 3.0;
 } // namespace
 
 void driverControl() {
+    Debug::Log("Manual Control Override.\n", Debug::LogLevel::Debug);
     // Keep running while the driver control period is active.
     while (true) {
         updateChassis();

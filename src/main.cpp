@@ -9,19 +9,14 @@
 #include "autonomous.h"
 #include "driver-control.h"
 #include "instance.h"
+#include "HiDebug.h"
 #include "vex.h"
 
 void initialize() {
-    // Controller and brain startup message.
+    // Clear the displays, then emit one startup log to every enabled output.
     Controller.Screen.clearScreen();
-    Controller.Screen.setCursor(1, 1);
-    Controller.Screen.print("MEKFC5 ready");
-
     Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("MEKFC5 ready");
-
-    printf("MEKFC5 ready\n");
+    Debug::Log("MEKFC5 ready", Debug::LogLevel::Info);
 
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Heading_Tracker.calibrate()) {
@@ -40,5 +35,6 @@ int main() {
     while (true) {
         vex::this_thread::sleep_for(10);
     }
+    
     return 0;
 }
