@@ -35,7 +35,7 @@ void Debug::Log(const std::string& content, LogLevel level) {
         return;
     }
 
-    const std::string line = "[" + std::string(levelTag(level)) + "]" + content + "\n";
+    const std::string line = "[" + std::string(levelTag(level)) + "]" + content + "\r\n";
 
     log_mutex.lock();
 #ifdef HD_LOG_OUTPUT_CONSOLE

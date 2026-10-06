@@ -2,6 +2,7 @@
 
 #include "vex.h"
 #include <string>
+#include <bits/basic_string.h>
 
 // ============================================================================
 // Logging configuration

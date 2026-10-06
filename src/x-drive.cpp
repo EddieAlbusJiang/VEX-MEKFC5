@@ -1,7 +1,19 @@
 #include "x-drive.h"
-
+#include <HiDebug.h>
 #include <algorithm>
 #include <cmath>
+
+// std::string doubleToString(double value, unsigned int precision) {
+//     if (std::isnan(value)) return "NaN";
+//     if (std::isinf(value)) return value > 0 ? "Infinity" : "-Infinity";
+
+//     // Precision + sign + integer part + '.' + '\0' + safety margin
+//     const size_t bufSize = precision + 64;
+//     std::vector<char> buf(bufSize);
+//     snprintf(buf.data(), bufSize, "%.*f",
+//                   static_cast<int>(precision), value);
+//     return std::string(buf.data());
+// }
 
 XDrive::XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2,
                double forward_gain, double lateral_gain, double rotational_gain)
@@ -31,12 +43,15 @@ void XDrive::drive(double forward, double lateral, double rotational) {
     // Scale all outputs down equally if any wheel exceeds full speed so the
     // resulting motion direction is preserved instead of being clipped.
     const double peak = std::max({std::fabs(output_l1), std::fabs(output_l2), std::fabs(output_r1), std::fabs(output_r2)});
-    const double scale = (peak > 100.0) ? (100.0 / peak) : 1.0;
+    double scale = (peak > 100.0) ? (100.0 / peak) : 1.0;
+    scale *= 0.4; // speed limit 
 
     l1_.spin(vex::directionType::fwd, output_l1 * scale, vex::velocityUnits::pct);
     l2_.spin(vex::directionType::fwd, output_l2 * scale, vex::velocityUnits::pct);
     r1_.spin(vex::directionType::fwd, output_r1 * scale, vex::velocityUnits::pct);
     r2_.spin(vex::directionType::fwd, output_r2 * scale, vex::velocityUnits::pct);
+    // Debug::Log("[x-drive]: scale = " + doubleToString(scale, 2), Debug::LogLevel::Info);
+    printf("%.2f %.2f %.2f %.2f %.2f \n", scale, output_l1, output_l2, output_r1, output_r2);
 }
 
 void XDrive::stop(vex::brakeType type) {
@@ -45,3 +60,5 @@ void XDrive::stop(vex::brakeType type) {
     r1_.stop(type);
     r2_.stop(type);
 }
+
+

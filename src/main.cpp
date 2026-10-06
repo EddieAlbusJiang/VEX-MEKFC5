@@ -25,12 +25,13 @@ void initialize() {
 }
 
 int main() {
+    printf("Hello MEKFC5\r\n");
     initialize();
 
     // Register the competition callbacks.
     Competition.autonomous(autonomous);
     Competition.drivercontrol(driverControl);
-
+    driverControl();
     // Keep the program alive so competition control can dispatch callbacks.
     while (true) {
         vex::this_thread::sleep_for(10);
