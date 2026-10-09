@@ -37,31 +37,32 @@ void XDrive::setOutputSup(double max_output) {
     max_output_ = std::max(0.0, std::min(max_output, 1.0)); // clamp to [0, 1]
 }
 
-void XDrive::applyMotor(vex::motor& motor, bool& held, double output) {
+double XDrive::applyMotor(vex::motor& motor, bool& held, double output) {
     if (!idle_brake_) {
         held = false;
         motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
-        return;
+        return output;
     }
-    
+
     const double magnitude = std::fabs(output);
     if (held) {
         // Already held: only resume once the output clears the hysteresis band.
         if (magnitude >= min_output_ + hysteresis_) {
             held = false;
             motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
-        } else {
-            motor.stop(vex::brakeType::hold);
+            return output;
         }
-    } else {
-        // Spinning: engage the hold once the output drops below the threshold.
-        if (magnitude < min_output_) {
-            held = true;
-            motor.stop(vex::brakeType::hold);
-        } else {
-            motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
-        }
+        motor.stop(vex::brakeType::hold);
+        return 0.0;
     }
+    // Spinning: engage the hold once the output drops below the threshold.
+    if (magnitude < min_output_) {
+        held = true;
+        motor.stop(vex::brakeType::hold);
+        return 0.0;
+    }
+    motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
+    return output;
 }
 
 void XDrive::drive(double forward, double lateral, double rotational) {
@@ -84,10 +85,10 @@ void XDrive::drive(double forward, double lateral, double rotational) {
     double scale = (peak > 100.0) ? (100.0 / peak) : 1.0;
     scale *= max_output_; // speed cap
 
-    applyMotor(l1_, held_[0], output_l1 * scale);
-    applyMotor(l2_, held_[1], output_l2 * scale);
-    applyMotor(r1_, held_[2], output_r1 * scale);
-    applyMotor(r2_, held_[3], output_r2 * scale);
+    last_output_[0] = applyMotor(l1_, held_[0], output_l1 * scale);
+    last_output_[1] = applyMotor(l2_, held_[1], output_l2 * scale);
+    last_output_[2] = applyMotor(r1_, held_[2], output_r1 * scale);
+    last_output_[3] = applyMotor(r2_, held_[3], output_r2 * scale);
     // Debug::Log("[x-drive]: scale = " + doubleToString(scale, 2), Debug::LogLevel::Info);
     printf("%.2f %.2f %.2f %.2f %.2f \n", scale, output_l1, output_l2, output_r1, output_r2);
 }
@@ -101,6 +102,16 @@ void XDrive::stop(vex::brakeType type) {
     for (bool& held : held_) {
         held = false;
     }
+    for (double& output : last_output_) {
+        output = 0.0;
+    }
+}
+
+double XDrive::wheelOutput(int index) const {
+    if (index < 0 || index >= 4) {
+        return 0.0;
+    }
+    return last_output_[index];
 }
 
 

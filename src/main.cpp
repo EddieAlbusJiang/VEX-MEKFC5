@@ -22,6 +22,11 @@ void initialize() {
     while (!Heading_Tracker.calibrate()) {
         vex::this_thread::sleep_for(10);
     }
+
+    // Zero the upper mechanisms: the load is manually placed at the bottom and
+    // the clamp manually opened before power-up.
+    Mech_Lift.resetPosition();
+    Mech_Clamp.resetPosition();
 }
 
 int main() {

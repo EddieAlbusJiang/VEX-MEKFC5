@@ -35,9 +35,13 @@ class XDrive {
     bool idle_brake_ = true;
     // Whether each wheel (l1, l2, r1, r2) is currently held.
     bool held_[4] = {false, false, false, false};
+    // The effective value last applied to each wheel (l1, l2, r1, r2); zero when
+    // a wheel is held by the idle-brake logic.
+    double last_output_[4] = {0.0, 0.0, 0.0, 0.0};
 
-    // Applies the idle-brake logic to a single motor.
-    void applyMotor(vex::motor& motor, bool& held, double output);
+    // Applies the idle-brake logic to a single motor and returns the effective
+    // value applied (zero when held/stopped).
+    double applyMotor(vex::motor& motor, bool& held, double output);
 
   public:
     XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2,
@@ -54,6 +58,10 @@ class XDrive {
 
     // Set the global output cap (0..1), clamped to a sane range.
     void setOutputSup(double max_output);
+
+    // The effective output last applied to a wheel: index 0..3 => l1, l2, r1, r2.
+    // Returns 0 for out-of-range indices.
+    double wheelOutput(int index) const;
 
     // Command the chassis. Inputs are in percent (-100..100). The combined
     // wheel outputs are scaled proportionally so no wheel saturates, preserving

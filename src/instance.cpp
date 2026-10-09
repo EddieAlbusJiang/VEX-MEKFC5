@@ -15,3 +15,9 @@ vex::inertial Inertial(vex::PORT20);
 HeadingTracker Heading_Tracker(Inertial, 3600.0 / 3544.0);
 
 XDrive Chassis(Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1, Motor_Drive_R2);
+
+vex::motor Motor_Lift(vex::PORT9, vex::gearSetting::ratio18_1, false);
+vex::motor Motor_Clamp(vex::PORT10, vex::gearSetting::ratio18_1, false);
+
+Lift Mech_Lift(Motor_Lift, 0.0, 1080.0, 15.0);
+Clamp Mech_Clamp(Motor_Clamp, 120.0, -15.0, 15.0);
