@@ -26,6 +26,44 @@ void XDrive::setGains(double forward_gain, double lateral_gain, double rotationa
     rotational_gain_ = rotational_gain;
 }
 
+void XDrive::setIdleBrake(bool enabled) { idle_brake_ = enabled; }
+
+void XDrive::setOutputInf(double min_output, double hysteresis) {
+    min_output_ = min_output;
+    hysteresis_ = hysteresis;
+}
+
+void XDrive::setOutputSup(double max_output) {
+    max_output_ = std::max(0.0, std::min(max_output, 1.0)); // clamp to [0, 1]
+}
+
+void XDrive::applyMotor(vex::motor& motor, bool& held, double output) {
+    if (!idle_brake_) {
+        held = false;
+        motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
+        return;
+    }
+    
+    const double magnitude = std::fabs(output);
+    if (held) {
+        // Already held: only resume once the output clears the hysteresis band.
+        if (magnitude >= min_output_ + hysteresis_) {
+            held = false;
+            motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
+        } else {
+            motor.stop(vex::brakeType::hold);
+        }
+    } else {
+        // Spinning: engage the hold once the output drops below the threshold.
+        if (magnitude < min_output_) {
+            held = true;
+            motor.stop(vex::brakeType::hold);
+        } else {
+            motor.spin(vex::directionType::fwd, output, vex::velocityUnits::pct);
+        }
+    }
+}
+
 void XDrive::drive(double forward, double lateral, double rotational) {
     const double f = forward * forward_gain_;
     const double l = lateral * lateral_gain_;
@@ -44,12 +82,12 @@ void XDrive::drive(double forward, double lateral, double rotational) {
     // resulting motion direction is preserved instead of being clipped.
     const double peak = std::max({std::fabs(output_l1), std::fabs(output_l2), std::fabs(output_r1), std::fabs(output_r2)});
     double scale = (peak > 100.0) ? (100.0 / peak) : 1.0;
-    scale *= 0.4; // speed limit 
+    scale *= max_output_; // speed cap
 
-    l1_.spin(vex::directionType::fwd, output_l1 * scale, vex::velocityUnits::pct);
-    l2_.spin(vex::directionType::fwd, output_l2 * scale, vex::velocityUnits::pct);
-    r1_.spin(vex::directionType::fwd, output_r1 * scale, vex::velocityUnits::pct);
-    r2_.spin(vex::directionType::fwd, output_r2 * scale, vex::velocityUnits::pct);
+    applyMotor(l1_, held_[0], output_l1 * scale);
+    applyMotor(l2_, held_[1], output_l2 * scale);
+    applyMotor(r1_, held_[2], output_r1 * scale);
+    applyMotor(r2_, held_[3], output_r2 * scale);
     // Debug::Log("[x-drive]: scale = " + doubleToString(scale, 2), Debug::LogLevel::Info);
     printf("%.2f %.2f %.2f %.2f %.2f \n", scale, output_l1, output_l2, output_r1, output_r2);
 }
@@ -59,6 +97,10 @@ void XDrive::stop(vex::brakeType type) {
     l2_.stop(type);
     r1_.stop(type);
     r2_.stop(type);
+    // Forget the hold state so the next drive() re-evaluates from scratch.
+    for (bool& held : held_) {
+        held = false;
+    }
 }
 
 

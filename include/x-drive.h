@@ -23,12 +23,37 @@ class XDrive {
     double lateral_gain_;
     double rotational_gain_;
 
+    // Global output cap (0..1) applied after normalization. 0.4 = 40% speed cap.
+    double max_output_ = 0.4;
+
+    // Idle-brake configuration. When a wheel's final output stays below
+    // min_output_ it is held (braked) instead of spinning near zero; it only
+    // resumes once the output rises above min_output_ + hysteresis_. This
+    // hysteresis prevents chatter when the command hovers around the threshold.
+    double min_output_ = 1.0;
+    double hysteresis_ = 1.0;
+    bool idle_brake_ = true;
+    // Whether each wheel (l1, l2, r1, r2) is currently held.
+    bool held_[4] = {false, false, false, false};
+
+    // Applies the idle-brake logic to a single motor.
+    void applyMotor(vex::motor& motor, bool& held, double output);
+
   public:
     XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2,
            double forward_gain = 1.0, double lateral_gain = 1.0, double rotational_gain = 1.0);
 
     // Adjust the per-axis gains at runtime.
     void setGains(double forward_gain, double lateral_gain, double rotational_gain);
+
+    // Enable/disable the idle-brake behavior (enabled by default).
+    void setIdleBrake(bool enabled);
+
+    // Set the hold threshold (percent) and the hysteresis margin used to resume.
+    void setOutputInf(double min_output, double hysteresis = 1.0);
+
+    // Set the global output cap (0..1), clamped to a sane range.
+    void setOutputSup(double max_output);
 
     // Command the chassis. Inputs are in percent (-100..100). The combined
     // wheel outputs are scaled proportionally so no wheel saturates, preserving
