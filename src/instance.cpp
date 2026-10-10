@@ -20,4 +20,4 @@ vex::motor Motor_Lift(vex::PORT9, vex::gearSetting::ratio18_1, false);
 vex::motor Motor_Clamp(vex::PORT10, vex::gearSetting::ratio18_1, false);
 
 Lift Mech_Lift(Motor_Lift, 0.0, 1080.0, 15.0);
-Clamp Mech_Clamp(Motor_Clamp, 120.0, -15.0, 15.0);
+Clamp Mech_Clamp(Motor_Clamp, 90.0, -20.0, 15.0);

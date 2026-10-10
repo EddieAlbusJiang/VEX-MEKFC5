@@ -5,7 +5,7 @@
 
 Clamp::Clamp(vex::motor& motor, double open_angle, double close_angle, double speed)
     : motor_(motor), open_angle_(open_angle), close_angle_(close_angle),
-      pid_(PIDParam{1.0, 0.05, 0.0}) {
+      pid_(PIDParam{0.9, 0.05, 0.0}) {
     // The clamp must hold at intermediate positions, so always hold.
     motor_.setStopping(vex::brakeType::hold);
     setSpeed(speed);
@@ -22,9 +22,9 @@ void Clamp::moveBy(int direction) {
     const double delta_deg = direction * (speed_ / 100.0) * 3600 * (TICK_MS / 1000.0) * 1.5;
 
     if (direction < 0) {
-        if (position() <= close_angle_) {
-            printf("[Clamp] close fail\n");
-            locked_position_ = position();
+        if (position() + delta_deg <= close_angle_) {
+            printf("[Clamp] close end\n");
+            locked_position_ = close_angle_;
             stop();
             return;
         }
@@ -32,9 +32,9 @@ void Clamp::moveBy(int direction) {
         motor_.spin(vex::directionType::rev, speed_, vex::velocityUnits::pct);
         printf("[Clamp] close\n");
     } else {
-        if (position() >= open_angle_) {
-            printf("[Clamp] open fail\n");
-            locked_position_ = position();
+        if (position() + delta_deg >= open_angle_) {
+            printf("[Clamp] open end\n");
+            locked_position_ = open_angle_;
             stop();
             return;
         }
