@@ -1,6 +1,8 @@
 #include "heading-tracker.h"
 #include "calc.h"
 #include <cmath>
+#include <string>
+#include <HiDebug.h>
 
 HeadingTracker::HeadingTracker(vex::inertial& inertial, double coefficient)
     : inertial_(inertial), coefficient_(coefficient) {}
@@ -16,5 +18,10 @@ bool HeadingTracker::calibrate() {
     vex::wait(800, vex::timeUnits::msec);
     const double rotation_1000 = inertial_.rotation();
     const double rotation_diff = rotation_1000 - rotation_200;
-    return std::fabs(rotation_diff) < 0.05;
+    const bool ret = std::fabs(rotation_diff) < 0.1;
+        Debug::Log("[HeadingTracker] rotation_diff: " + Debug::doubleToString(rotation_diff), Debug::LogLevel::Info);
+    if(!ret){
+        Debug::Log("[HeadingTracker] Failed to calibrate Inertial Sensor.", Debug::LogLevel::Warning);
+    }
+    return ret;
 }

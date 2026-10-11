@@ -3,17 +3,17 @@
 #include <algorithm>
 #include <utility>
 
-Lift::Lift(vex::motor& motor, double min_angle, double max_angle, double speed)
-    : motor_(motor), min_angle_(min_angle), max_angle_(max_angle) {
+Lift::Lift(vex::motor_group& motors, double min_angle, double max_angle, double speed)
+    : motors_(motors), min_angle_(min_angle), max_angle_(max_angle) {
     if (min_angle_ > max_angle_) {
         std::swap(min_angle_, max_angle_);
     }
     // The load must be able to hold position, so always brake.
-    motor_.setStopping(vex::brakeType::brake);
+    motors_.setStopping(vex::brakeType::brake);
     setSpeed(speed);
 }
 
-double Lift::position() const { return motor_.position(vex::rotationUnits::deg); }
+double Lift::position() const { return motors_.position(vex::rotationUnits::deg); }
 
 bool Lift::atBottom() const { return position() <= min_angle_; }
 bool Lift::atTop() const { return position() >= max_angle_; }
@@ -24,21 +24,21 @@ void Lift::moveBy(int direction) {
             stop();
             return;
         }
-        motor_.spin(vex::directionType::fwd, speed_, vex::velocityUnits::pct);
+        motors_.spin(vex::directionType::fwd, speed_, vex::velocityUnits::pct);
     } else {
         if (position() <= min_angle_) {
             stop();
             return;
         }
-        motor_.spin(vex::directionType::fwd, -speed_, vex::velocityUnits::pct);
+        motors_.spin(vex::directionType::fwd, -speed_, vex::velocityUnits::pct);
     }
 }
 
 void Lift::up() { moveBy(+1); }
 void Lift::down() { moveBy(-1); }
 
-void Lift::stop() { motor_.stop(vex::brakeType::brake); }
+void Lift::stop() { motors_.stop(vex::brakeType::hold); }
 
-void Lift::resetPosition() { motor_.resetPosition(); }
+void Lift::resetPosition() { motors_.resetPosition(); }
 
 void Lift::setSpeed(double speed) { speed_ = std::max(0.0, std::min(speed, 100.0)); }

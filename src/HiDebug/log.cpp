@@ -23,6 +23,22 @@ const char* levelTag(LogLevel level) {
 
 // Guards the output destinations
 vex::mutex log_mutex;
+
+// Rolling text buffer for the Brain screen. The default Brain font (mono20)
+// shows 12 rows, so the buffer keeps the most recent 12 lines: when a new line
+// would exceed that, the oldest is dropped and the screen is redrawn.
+constexpr int kBrainRows = 12;
+std::string brain_lines[kBrainRows];
+int brain_line_count = 0;
+
+void redrawBrainScreen() {
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    for (int i = 0; i < brain_line_count; ++i) {
+        Brain.Screen.print("%s", brain_lines[i].c_str());
+        Brain.Screen.newLine();
+    }
+}
 } // namespace
 
 void Debug::Log(const std::string& content, LogLevel level) {
@@ -42,7 +58,20 @@ void Debug::Log(const std::string& content, LogLevel level) {
     printf("%s", line.c_str());
 #endif
 #ifdef HD_LOG_OUTPUT_BRAIN
-    Brain.Screen.print("%s", line.c_str());
+    if (brain_line_count < kBrainRows) {
+        // Still filling the screen: append and print incrementally.
+        brain_lines[brain_line_count++] = line;
+        Brain.Screen.print("%s", line.c_str());
+        Brain.Screen.newLine();
+    } else {
+        // Full: drop the oldest line, append the new one at the bottom, then
+        // repaint the rolling window.
+        for (int i = 1; i < kBrainRows; ++i) {
+            brain_lines[i - 1] = brain_lines[i];
+        }
+        brain_lines[kBrainRows - 1] = line;
+        redrawBrainScreen();
+    }
 #endif
 #ifdef HD_LOG_OUTPUT_CONTROLLER
     Controller.Screen.print("%s", line.c_str());

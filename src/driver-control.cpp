@@ -31,6 +31,7 @@ DriveMode getDriveMode() {
 void onModeToggle() {
     drive_mode_mutex.lock();
     drive_mode = (drive_mode == DriveMode::HeadingUp) ? DriveMode::NorthUp : DriveMode::HeadingUp;
+    heading_reset_requested = true;// Automatically Reset Heading.
     drive_mode_mutex.unlock();
 }
 
@@ -54,7 +55,7 @@ void serviceHeadingReset() {
 } // namespace
 
 void driverControl() {
-    Debug::Log("Manual Control Override.\n", Debug::LogLevel::Debug);
+    Debug::Log("[DriverControl] Manual Control Override.\n", Debug::LogLevel::Debug);
     control_timer.reset();
 
     // Register the drive-mode and heading-reset button callbacks once.
@@ -103,10 +104,10 @@ void updateChassis() {
 }
 
 void updateLift() {
-    if (Controller.ButtonL1.pressing()) {
+    if (Controller.ButtonUp.pressing()) {
         printf("Controller L1\n");
         Mech_Lift.up();
-    } else if (Controller.ButtonL2.pressing()) {
+    } else if (Controller.ButtonDown.pressing()) {
         printf("Controller L2\n");
         Mech_Lift.down();
     } else {

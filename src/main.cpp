@@ -16,12 +16,13 @@ void initialize() {
     // Clear the displays, then emit one startup log to every enabled output.
     Controller.Screen.clearScreen();
     Brain.Screen.clearScreen();
-    Debug::Log("MEKFC5 ready", Debug::LogLevel::Info);
+    Debug::Log("[Main] MEKFC5 Starting Up...", Debug::LogLevel::Info);
 
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Heading_Tracker.calibrate()) {
         vex::this_thread::sleep_for(10);
     }
+    Debug::Log("[Main] Inertial Sensor Calibrated.", Debug::LogLevel::Info);
 
     // Zero the upper mechanisms: the load is manually placed at the bottom and
     // the clamp manually opened before power-up.
