@@ -6,10 +6,15 @@
 #include "v5.h"
 #include "v5_vcs.h"
 
+// Control-loop tick used for the clamp position-lock compensation (milliseconds).
+#ifndef TICK_MS
+#define TICK_MS 10
+#endif
+
 
 #define waitUntil(condition)                                                   \
   do {                                                                         \
-    wait(5, msec);                                                             \
+    vex::wait(5, vex::timeUnits::msec);                                        \
   } while (!(condition))
 
 #define repeat(iterations)                                                     \
