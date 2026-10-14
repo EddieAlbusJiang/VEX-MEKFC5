@@ -25,6 +25,9 @@ class Odometry {
     double imu_px_ = 0.0, imu_py_ = 0.0; // cm
     double imu_prev_wax_ = 0.0, imu_prev_way_ = 0.0;
     int imu_still_frames_ = 0;
+    // Horizontal acceleration bias (g), sampled at rest on power-up.
+    double imu_bias_x_g_ = 0.0;
+    double imu_bias_y_g_ = 0.0;
 
     // --- Wheel odometry ---
     bool wheel_ready_ = false;
@@ -43,6 +46,7 @@ class Odometry {
     bool calibrate();
 
     // IMU dead reckoning.
+    void calibrateImuBias(); // sample the at-rest horizontal acceleration as bias
     void updateImu();
     double imuX() const;
     double imuY() const;

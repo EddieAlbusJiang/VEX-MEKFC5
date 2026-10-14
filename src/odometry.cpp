@@ -12,6 +12,8 @@ constexpr double kStillAccelEps = 0.03; // g, allowed deviation of |a| from 1g
 constexpr double kStillGyroEps = 2.0;   // deg/s
 constexpr int kStillFrames = 10;        // consecutive still frames before ZUPT
 constexpr int kOdomPeriodMs = 10;       // background update period
+constexpr int kCalibSamples = 50;       // acceleration bias samples
+constexpr int kCalibPeriodMs = 10;      // acceleration bias sample period
 } // namespace
 
 Odometry::Odometry(vex::inertial& inertial, double coefficient,
@@ -42,6 +44,21 @@ bool Odometry::calibrate() {
     return stable;
 }
 
+void Odometry::calibrateImuBias() {
+    double sx = 0.0;
+    double sy = 0.0;
+    for (int i = 0; i < kCalibSamples; ++i) {
+        sx += inertial_.acceleration(vex::axisType::xaxis);
+        sy += inertial_.acceleration(vex::axisType::yaxis);
+        vex::this_thread::sleep_for(kCalibPeriodMs);
+    }
+    imu_bias_x_g_ = sx / kCalibSamples;
+    imu_bias_y_g_ = sy / kCalibSamples;
+    Debug::Log("[Odometry] accel bias: x=" + Debug::doubleToString(imu_bias_x_g_, 3) +
+                   " y=" + Debug::doubleToString(imu_bias_y_g_, 3),
+               Debug::LogLevel::Info);
+}
+
 void Odometry::updateImu() {
     const int now = imu_timer_.time();
     if (!imu_ready_) {
@@ -59,12 +76,16 @@ void Odometry::updateImu() {
     const double ay_g = inertial_.acceleration(vex::axisType::yaxis);
     const double az_g = inertial_.acceleration(vex::axisType::zaxis);
 
+    // Remove the at-rest horizontal bias before integrating.
+    const double axc = ax_g - imu_bias_x_g_;
+    const double ayc = ay_g - imu_bias_y_g_;
+
     // Rotate the body-frame horizontal acceleration into the power-up frame.
     const double th = rotation() * (M_PI / 180.0);
     const double c = std::cos(th);
     const double s = std::sin(th);
-    double wax = (ax_g * c + ay_g * s) * kGravity;
-    double way = (-ax_g * s + ay_g * c) * kGravity;
+    double wax = (axc * c + ayc * s) * kGravity;
+    double way = (-axc * s + ayc * c) * kGravity;
 
     // Low-pass filter to tame noise before integrating.
     wax = kAccelLpf * wax + (1.0 - kAccelLpf) * imu_prev_wax_;
