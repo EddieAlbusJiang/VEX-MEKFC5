@@ -1,8 +1,8 @@
 #pragma once
 
 #include "clamp.h"
-#include "heading-tracker.h"
 #include "lift.h"
+#include "odometry.h"
 #include "vex.h"
 #include "x-drive.h"
 
@@ -16,7 +16,7 @@ extern vex::motor Motor_Drive_R1;
 extern vex::motor Motor_Drive_R2;
 
 extern vex::inertial Inertial;
-extern HeadingTracker Heading_Tracker;
+extern Odometry Odom;
 
 extern XDrive Chassis;
 

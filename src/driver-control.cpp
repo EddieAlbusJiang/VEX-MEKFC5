@@ -49,7 +49,7 @@ void serviceHeadingReset() {
     heading_reset_requested = false;
     drive_mode_mutex.unlock();
     if (requested) {
-        Heading_Tracker.resetRotation();
+        Odom.resetRotation();
     }
 }
 } // namespace
@@ -76,7 +76,7 @@ void driverControl() {
 
         // Real-time mechanism telemetry (angles in motor degrees).
         printf("[Mech] Lift %.1f Clamp %.1f\n", Mech_Lift.position(), Mech_Clamp.position());
-        printf("[Inertial] Heading %.1f Rotation %.1f\n", Heading_Tracker.heading(), Heading_Tracker.rotation());
+        printf("[Inertial] Heading %.1f Rotation %.1f\n", Odom.heading(), Odom.rotation());
         vex::this_thread::sleep_for(10);
     }
 }
@@ -93,7 +93,7 @@ void updateChassis() {
 
     if (getDriveMode() == DriveMode::NorthUp) {
         // Rotate the field-frame (north/east) input into the robot's body frame.
-        const double heading_rad = Heading_Tracker.heading() * (M_PI / 180.0);
+        const double heading_rad = Odom.heading() * (M_PI / 180.0);
         const double c = std::cos(heading_rad);
         const double s = std::sin(heading_rad);
         body_forward = f * c + l * s;

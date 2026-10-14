@@ -12,7 +12,8 @@ vex::motor Motor_Drive_R1(vex::PORT4, vex::gearSetting::ratio18_1, true);
 vex::motor Motor_Drive_R2(vex::PORT5, vex::gearSetting::ratio18_1, true);
 
 vex::inertial Inertial(vex::PORT20);
-HeadingTracker Heading_Tracker(Inertial, 3600.0 / 3544.0);
+Odometry Odom(Inertial, 3600.0 / 3544.0, Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1,
+              Motor_Drive_R2, 6.984 /* wheel diameter (cm) */, 1.0 /* motor:wheel ratio */);
 
 XDrive Chassis(Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1, Motor_Drive_R2);
 
