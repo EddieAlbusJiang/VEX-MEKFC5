@@ -3,6 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+// Wheel speed (pct) below which a wheel is considered stopped.
+constexpr double kBrakeVelEps = 0.5;
+} // namespace
+
 // std::string doubleToString(double value, unsigned int precision) {
 //     if (std::isnan(value)) return "NaN";
 //     if (std::isinf(value)) return value > 0 ? "Infinity" : "-Infinity";
@@ -89,6 +94,12 @@ void XDrive::drive(double forward, double lateral, double rotational) {
     last_output_[1] = applyMotor(l2_, held_[1], output_l2 * scale);
     last_output_[2] = applyMotor(r1_, held_[2], output_r1 * scale);
     last_output_[3] = applyMotor(r2_, held_[3], output_r2 * scale);
+
+    // Update the braked/stationary flag from the measured wheel speeds.
+    braking_ = std::fabs(l1_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps &&
+               std::fabs(l2_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps &&
+               std::fabs(r1_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps &&
+               std::fabs(r2_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps;
     // Debug::Log("[x-drive]: scale = " + doubleToString(scale, 2), Debug::LogLevel::Info);
     printf("%.2f %.2f %.2f %.2f %.2f \n", scale, output_l1, output_l2, output_r1, output_r2);
 }
@@ -105,6 +116,8 @@ void XDrive::stop(vex::brakeType type) {
     for (double& output : last_output_) {
         output = 0.0;
     }
+    // Brake/hold leaves the wheels stationary; coast does not.
+    braking_ = (type != vex::brakeType::coast);
 }
 
 double XDrive::wheelOutput(int index) const {
@@ -113,5 +126,7 @@ double XDrive::wheelOutput(int index) const {
     }
     return last_output_[index];
 }
+
+bool XDrive::isBraking() const { return braking_; }
 
 

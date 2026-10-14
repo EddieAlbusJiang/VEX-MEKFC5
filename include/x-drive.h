@@ -24,7 +24,7 @@ class XDrive {
     double rotational_gain_;
 
     // Global output cap (0..1) applied after normalization. 0.4 = 40% speed cap.
-    double max_output_ = 0.4;
+    double max_output_ = 0.5;
 
     // Idle-brake configuration. When a wheel's final output stays below
     // min_output_ it is held (braked) instead of spinning near zero; it only
@@ -38,6 +38,9 @@ class XDrive {
     // The effective value last applied to each wheel (l1, l2, r1, r2); zero when
     // a wheel is held by the idle-brake logic.
     double last_output_[4] = {0.0, 0.0, 0.0, 0.0};
+    // Whether the drive is effectively braked/stationary (all wheel speeds ~0).
+    // Read from other threads, so kept volatile.
+    volatile bool braking_ = true;
 
     // Applies the idle-brake logic to a single motor and returns the effective
     // value applied (zero when held/stopped).
@@ -62,6 +65,9 @@ class XDrive {
     // The effective output last applied to a wheel: index 0..3 => l1, l2, r1, r2.
     // Returns 0 for out-of-range indices.
     double wheelOutput(int index) const;
+
+    // True when all four wheels are effectively stopped (braked/stationary).
+    bool isBraking() const;
 
     // Command the chassis. Inputs are in percent (-100..100). The combined
     // wheel outputs are scaled proportionally so no wheel saturates, preserving

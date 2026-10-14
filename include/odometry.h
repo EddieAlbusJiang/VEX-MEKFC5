@@ -25,9 +25,10 @@ class Odometry {
     double imu_px_ = 0.0, imu_py_ = 0.0; // cm
     double imu_prev_wax_ = 0.0, imu_prev_way_ = 0.0;
     int imu_still_frames_ = 0;
-    // Horizontal acceleration bias (g), sampled at rest on power-up.
-    double imu_bias_x_g_ = 0.0;
-    double imu_bias_y_g_ = 0.0;
+    // Mounting rotation (IMU frame -> body frame), computed by calibrateImuBias().
+    // Rows are the body x/y/z axes expressed in the IMU frame; a_body = R * a_imu.
+    // Default is identity (no correction).
+    double imu_R_[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
 
     // --- Wheel odometry ---
     bool wheel_ready_ = false;
@@ -46,8 +47,12 @@ class Odometry {
     bool calibrate();
 
     // IMU dead reckoning.
-    void calibrateImuBias(); // sample the at-rest horizontal acceleration as bias
-    void updateImu();
+    // Calibrate the IMU mounting (tilt + yaw): samples gravity while stationary,
+    // then drives forward briefly to resolve the body forward axis. Replaces the
+    // former x/y bias subtraction.
+    void calibrateImuBias();
+    // drive_braked: when true (wheels stopped) the integration is paused.
+    void updateImu(bool drive_braked);
     double imuX() const;
     double imuY() const;
     void resetImu();
