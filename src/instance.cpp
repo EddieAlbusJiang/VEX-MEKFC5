@@ -13,7 +13,7 @@ vex::motor Motor_Drive_R2(vex::PORT5, vex::gearSetting::ratio18_1, true);
 
 vex::inertial Inertial(vex::PORT20);
 Odometry Odom(Inertial, 3600.0 / 3544.0, Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1,
-              Motor_Drive_R2, 6.984 /* wheel diameter (cm) */, 1.0 /* motor:wheel ratio */);
+              Motor_Drive_R2, 8.25 /* wheel diameter (cm) */, 1.0 /* motor:wheel ratio */);
 
 XDrive Chassis(Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1, Motor_Drive_R2);
 
@@ -22,5 +22,5 @@ vex::motor Motor_Lift_2(vex::PORT8, vex::gearSetting::ratio18_1, true);
 vex::motor_group Motor_Lift(Motor_Lift_1, Motor_Lift_2);
 vex::motor Motor_Clamp(vex::PORT10, vex::gearSetting::ratio18_1, false);
 
-Lift Mech_Lift(Motor_Lift, 0.0, 1080.0, 15.0);
-Clamp Mech_Clamp(Motor_Clamp, 90.0, -20.0, 15.0);
+Lift Mech_Lift(Motor_Lift, 0.0, 1250.0, 30.0);
+Clamp Mech_Clamp(Motor_Clamp, 40.0, -10.0, 20.0);
