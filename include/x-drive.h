@@ -23,15 +23,15 @@ class XDrive {
     double lateral_gain_;
     double rotational_gain_;
 
-    // Global output cap (0..1) applied after normalization. 0.4 = 40% speed cap.
-    double max_output_ = 0.5;
+    // Global output cap (0..1) applied after normalization (see P_XDRIVE_MAX_OUTPUT).
+    double max_output_ = P_XDRIVE_MAX_OUTPUT;
 
     // Idle-brake configuration. When a wheel's final output stays below
     // min_output_ it is held (braked) instead of spinning near zero; it only
     // resumes once the output rises above min_output_ + hysteresis_. This
     // hysteresis prevents chatter when the command hovers around the threshold.
-    double min_output_ = 1.0;
-    double hysteresis_ = 1.0;
+    double min_output_ = P_XDRIVE_MIN_OUTPUT;
+    double hysteresis_ = P_XDRIVE_HYSTERESIS;
     bool idle_brake_ = true;
     // Whether each wheel (l1, l2, r1, r2) is currently held.
     bool held_[4] = {false, false, false, false};

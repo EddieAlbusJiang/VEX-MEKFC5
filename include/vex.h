@@ -6,6 +6,8 @@
 #include "v5.h"
 #include "v5_vcs.h"
 
+#include "config.h"
+
 // Control-loop tick used for the clamp position-lock compensation (milliseconds).
 #ifndef TICK_MS
 #define TICK_MS 10

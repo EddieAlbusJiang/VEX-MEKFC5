@@ -18,8 +18,8 @@ class Clamp {
     // current position. On stop(), if the clamp has drifted away from it beyond
     // tolerance_, a PID loop drives it back; otherwise it holds in place.
     double locked_position_ = 0.0;
-    double tolerance_ = 1.0; // deadband (degrees)
-    PIDController pid_;      // position loop, default {2.0, 0.05, 0.0}
+    double tolerance_ = P_CLAMP_TOLERANCE; // deadband (degrees)
+    PIDController pid_;      // position loop, gains from P_CLAMP_PID_*
     bool locking_ = false;   // whether the compensation loop is active
 
     // Moves at constant speed toward open (+1) or close (-1); records the

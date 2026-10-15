@@ -5,7 +5,7 @@
 
 Clamp::Clamp(vex::motor& motor, double open_angle, double close_angle, double speed)
     : motor_(motor), open_angle_(open_angle), close_angle_(close_angle),
-      pid_(PIDParam{0.9, 0.05, 0.0}) {
+      pid_(PIDParam{P_CLAMP_PID_KP, P_CLAMP_PID_KD, P_CLAMP_PID_KI}) {
     // The clamp must hold at intermediate positions, so always hold.
     motor_.setStopping(vex::brakeType::hold);
     setSpeed(speed);
