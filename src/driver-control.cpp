@@ -20,12 +20,27 @@ enum class DriveMode : int { HeadingUp = 1, NorthUp = 2 };
 DriveMode drive_mode = DriveMode::HeadingUp; // default mode 1
 vex::mutex drive_mode_mutex;                 // shared with the button callbacks
 bool heading_reset_requested = false;
+// Axis-aligned translation (Button B): keep only the dominant translation axis.
+bool axis_lock_enabled = false;
 
 DriveMode getDriveMode() {
     drive_mode_mutex.lock();
     const DriveMode mode = drive_mode;
     drive_mode_mutex.unlock();
     return mode;
+}
+
+bool getAxisLock() {
+    drive_mode_mutex.lock();
+    const bool enabled = axis_lock_enabled;
+    drive_mode_mutex.unlock();
+    return enabled;
+}
+
+void onAxisLockToggle() {
+    drive_mode_mutex.lock();
+    axis_lock_enabled = !axis_lock_enabled;
+    drive_mode_mutex.unlock();
 }
 
 void onModeToggle() {
@@ -63,6 +78,7 @@ void driverControl() {
     if (!callbacks_registered) {
         Controller.ButtonX.pressed(onModeToggle);
         Controller.ButtonY.pressed(onHeadingReset);
+        Controller.ButtonB.pressed(onAxisLockToggle);
         callbacks_registered = true;
     }
 
@@ -98,6 +114,16 @@ void updateChassis() {
         const double s = std::sin(heading_rad);
         body_forward = f * c + l * s;
         body_lateral = -f * s + l * c;
+    }
+
+    // Axis-aligned mode: after the frame transform, keep only the dominant
+    // translation axis so the robot travels in a straight line.
+    if (getAxisLock()) {
+        if (std::fabs(body_forward) >= std::fabs(body_lateral)) {
+            body_lateral = 0.0; // ties keep forward
+        } else {
+            body_forward = 0.0;
+        }
     }
 
     Chassis.drive(body_forward, body_lateral, r);
@@ -143,6 +169,18 @@ void updateControllerScreen() {
         return magnitude > 99 ? 99 : magnitude;
     };
 
+    // Integer cm clamped to what a 4-char field can hold (-999..9999).
+    const auto clamp4 = [](double value) {
+        int v = static_cast<int>(std::lround(value));
+        if (v > 9999) {
+            v = 9999;
+        }
+        if (v < -999) {
+            v = -999;
+        }
+        return v;
+    };
+
     char row1[20];
     char row2[20];
     char row3[20];
@@ -157,14 +195,18 @@ void updateControllerScreen() {
                   static_cast<int>(std::lround(Mech_Lift.position())),
                   static_cast<int>(std::lround(Mech_Clamp.position())));
 
-    // Row 3: drive mode and elapsed time since driverControl() started (seconds).
+    // Row 3: wheel-odometry position (x forward, y right, cm), axis-lock flag,
+    // drive mode, and elapsed time (seconds).
     int seconds = now_ms / 1000;
     if (seconds > 999) {
         seconds = 999;
     }
+    const int x = clamp4(Odom.wheelX());
+    const int y = clamp4(Odom.wheelY());
+    const char axis_char = getAxisLock() ? 'A' : ' ';
     const char mode_char = (getDriveMode() == DriveMode::NorthUp) ? 'Y' : 'X';
-    snprintf(row3, sizeof(row3), "ManualControl %c %3d", mode_char, seconds);
-
+    snprintf(row3, sizeof(row3), "Man %4d,%4d %c%c%03d", x, y, axis_char, mode_char, seconds);
+                                  
     // Fixed-width fields overwrite the previous frame, so no clear is needed.
     Controller.Screen.setCursor(1, 1);
     Controller.Screen.print("%s", row1);
