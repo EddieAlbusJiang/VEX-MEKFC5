@@ -1,4 +1,7 @@
 #include "x-drive.h"
+#include "calc.h"
+#include "odometry.h"
+#include "pid-controller.h"
 #include <HiDebug.h>
 #include <algorithm>
 #include <cmath>
@@ -6,6 +9,23 @@
 namespace {
 // Wheel speed (pct) below which a wheel is considered stopped.
 constexpr double kBrakeVelEps = 0.5;
+
+// Symmetric clamp to [-limit, limit].
+double clampSym(double value, double limit) {
+    if (value > limit) {
+        return limit;
+    }
+    if (value < -limit) {
+        return -limit;
+    }
+    return value;
+}
+
+// Shared PID controllers for the auto routines. Constructed once and reused
+// across the (possibly multi-step) autonomous sequence; reset() before each run.
+PIDController pid_move_forward(PIDParam{P_AUTO_MOVE_PID_KP, P_AUTO_MOVE_PID_KD, P_AUTO_MOVE_PID_KI});
+PIDController pid_move_lateral(PIDParam{P_AUTO_MOVE_PID_KP, P_AUTO_MOVE_PID_KD, P_AUTO_MOVE_PID_KI});
+PIDController pid_rot(PIDParam{P_AUTO_ROT_PID_KP, P_AUTO_ROT_PID_KD, P_AUTO_ROT_PID_KI});
 } // namespace
 
 // std::string doubleToString(double value, unsigned int precision) {
@@ -20,9 +40,9 @@ constexpr double kBrakeVelEps = 0.5;
 //     return std::string(buf.data());
 // }
 
-XDrive::XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2,
+XDrive::XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2, Odometry& odom,
                double forward_gain, double lateral_gain, double rotational_gain)
-    : l1_(l1), l2_(l2), r1_(r1), r2_(r2), forward_gain_(forward_gain),
+    : l1_(l1), l2_(l2), r1_(r1), r2_(r2), odom_(odom), forward_gain_(forward_gain),
       lateral_gain_(lateral_gain), rotational_gain_(rotational_gain) {}
 
 void XDrive::setGains(double forward_gain, double lateral_gain, double rotational_gain) {
@@ -128,5 +148,84 @@ double XDrive::wheelOutput(int index) const {
 }
 
 bool XDrive::isBraking() const { return braking_; }
+
+void XDrive::runMove(double target_x, double target_y, double speed) {
+    const double entry_heading = odom_.heading();
+
+    pid_move_forward.reset();
+    pid_move_lateral.reset();
+    pid_rot.reset();
+
+    const double limit = std::fabs(speed);
+    vex::timer timer;
+    vex::timer settle;
+    while (timer.time() < P_AUTO_TIMEOUT_MS) {
+        const double ex = target_x - odom_.wheelX();
+        const double ey = target_y - odom_.wheelY();
+
+        // Rotate the field-frame error into the body frame.
+        const double th = odom_.heading() * (M_PI / 180.0);
+        const double c = std::cos(th);
+        const double s = std::sin(th);
+        const double bf = ex * c + ey * s;
+        const double bl = -ex * s + ey * c;
+
+        pid_move_forward.update(bf);
+        pid_move_lateral.update(bl);
+        pid_rot.update(degNorm180(entry_heading - odom_.heading()));
+
+        const double fwd = clampSym(pid_move_forward.output(), limit);
+        const double lat = clampSym(pid_move_lateral.output(), limit);
+        const double rot = clampSym(pid_rot.output(), limit);
+
+        drive(fwd, lat, rot);
+
+        if (std::fabs(ex) < P_AUTO_POS_TOL && std::fabs(ey) < P_AUTO_POS_TOL) {
+            if (settle.time() >= P_AUTO_SETTLE_MS) {
+                break;
+            }
+        } else {
+            settle.reset();
+        }
+        vex::this_thread::sleep_for(10);
+    }
+
+    stop(vex::brakeType::hold);
+}
+
+void XDrive::runRotate(double target_deg, double speed) {
+    pid_rot.reset();
+
+    const double limit = std::fabs(speed);
+    vex::timer timer;
+    vex::timer settle;
+    while (timer.time() < P_AUTO_TIMEOUT_MS) {
+        const double herr = degNorm180(target_deg - odom_.heading());
+        pid_rot.update(herr);
+        const double rot = clampSym(pid_rot.output(), limit);
+        drive(0.0, 0.0, rot);
+
+        if (std::fabs(herr) < P_AUTO_ANGLE_TOL) {
+            if (settle.time() >= P_AUTO_SETTLE_MS) {
+                break;
+            }
+        } else {
+            settle.reset();
+        }
+        vex::this_thread::sleep_for(10);
+    }
+
+    stop(vex::brakeType::hold);
+}
+
+void XDrive::AutoMoveTo(double target_x, double target_y, double speed) { runMove(target_x, target_y, speed); }
+
+void XDrive::AutoMoveFor(double diff_x, double diff_y, double speed) {
+    runMove(odom_.wheelX() + diff_x, odom_.wheelY() + diff_y, speed);
+}
+
+void XDrive::AutoRotateTo(double target_deg, double speed) { runRotate(target_deg, speed); }
+
+void XDrive::AutoRotateFor(double diff_deg, double speed) { runRotate(odom_.heading() + diff_deg, speed); }
 
 

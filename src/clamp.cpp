@@ -99,3 +99,49 @@ void Clamp::setSpeed(double speed) { speed_ = std::max(0.0, std::min(speed, 100.
 void Clamp::setLockTolerance(double tolerance) { tolerance_ = std::fabs(tolerance); }
 
 void Clamp::setLockGains(double kP, double kD, double kI) { pid_.setGains(PIDParam{kP, kD, kI}); }
+
+void Clamp::runToAngle(double target_deg, double speed) {
+    // Clamp the target within the reachable range.
+    target_deg = std::max(close_angle_, std::min(target_deg, open_angle_));
+
+    const double prev_speed = speed_;
+    setSpeed(speed);
+
+    vex::timer timer;
+    vex::timer settle;
+    while (timer.time() < P_MECH_TIMEOUT_MS) {
+        const double pos = position();
+        const double err = target_deg - pos;
+
+        if (std::fabs(err) <= tolerance_) {
+            motor_.stop(vex::brakeType::hold);
+            if (settle.time() >= P_MECH_SETTLE_MS) {
+                break;
+            }
+        } else if ((err > 0.0 && pos >= open_angle_) || (err < 0.0 && pos <= close_angle_)) {
+            motor_.stop(vex::brakeType::hold); // blocked by a limit before reaching target
+            break;
+        } else {
+            settle.reset();
+            if (err > 0.0) {
+                motor_.spin(vex::directionType::fwd, speed_, vex::velocityUnits::pct);
+            } else {
+                motor_.spin(vex::directionType::rev, speed_, vex::velocityUnits::pct);
+            }
+        }
+        vex::this_thread::sleep_for(10);
+    }
+
+    motor_.stop(vex::brakeType::hold);
+    locked_position_ = position(); // keep the lock consistent with the new position
+    locking_ = false;
+    setSpeed(prev_speed);
+}
+
+void Clamp::AutoClampTo(double target_deg, double speed) { runToAngle(target_deg, speed); }
+
+void Clamp::AutoClampFor(double delta_deg, double speed) { runToAngle(position() + delta_deg, speed); }
+
+void Clamp::AutoClampOpen(double speed) { runToAngle(open_angle_, speed); }
+
+void Clamp::AutoClampClose(double speed) { runToAngle(close_angle_, speed); }

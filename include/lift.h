@@ -18,6 +18,9 @@ class Lift {
     // brakes when the corresponding limit is reached.
     void moveBy(int direction);
 
+    // Blocking constant-speed move to a target angle (used by the Auto helpers).
+    void runToAngle(double target_deg, double speed);
+
   public:
     Lift(vex::motor_group& motors, double min_angle, double max_angle, double speed);
 
@@ -29,6 +32,12 @@ class Lift {
     void down();
     void stop();          // always brakes with brakeType::brake
     void resetPosition(); // current angle becomes zero
+
+    // ----- Autonomous helpers (blocking; move to an angle, then hold) -----
+    void AutoLiftTo(double target_deg, double speed = P_LIFT_SPEED);
+    void AutoLiftFor(double delta_deg, double speed = P_LIFT_SPEED);
+    void AutoLiftUp(double speed = P_LIFT_SPEED);
+    void AutoLiftDown(double speed = P_LIFT_SPEED);
 
     // Set the constant rate (percent), clamped to [0, 100].
     void setSpeed(double speed);

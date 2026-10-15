@@ -26,6 +26,9 @@ class Clamp {
     // position and stops (holds) at the corresponding limit.
     void moveBy(int direction);
 
+    // Blocking constant-speed move to a target angle (used by the Auto helpers).
+    void runToAngle(double target_deg, double speed);
+
   public:
     Clamp(vex::motor& motor, double open_angle, double close_angle, double speed);
 
@@ -38,6 +41,12 @@ class Clamp {
     // Holds in place, or compensates back to the locked position if it drifted.
     void stop();
     void resetPosition(); // current angle becomes zero (and clears the lock)
+
+    // ----- Autonomous helpers (blocking; move to an angle, then hold) -----
+    void AutoClampTo(double target_deg, double speed = P_CLAMP_SPEED);
+    void AutoClampFor(double delta_deg, double speed = P_CLAMP_SPEED);
+    void AutoClampOpen(double speed = P_CLAMP_SPEED);
+    void AutoClampClose(double speed = P_CLAMP_SPEED);
 
     // Set the constant rate (percent), clamped to [0, 100].
     void setSpeed(double speed);

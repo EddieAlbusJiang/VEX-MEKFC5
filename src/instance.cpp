@@ -15,7 +15,7 @@ vex::inertial Inertial(vex::PORT20);
 Odometry Odom(Inertial, P_ODOM_COEFFICIENT, Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1,
               Motor_Drive_R2, P_ODOM_WHEEL_DIAMETER_CM, P_ODOM_WHEEL_RATIO);
 
-XDrive Chassis(Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1, Motor_Drive_R2);
+XDrive Chassis(Motor_Drive_L1, Motor_Drive_L2, Motor_Drive_R1, Motor_Drive_R2, Odom);
 
 vex::motor Motor_Lift_1(vex::PORT9, vex::gearSetting::ratio18_1, false);
 vex::motor Motor_Lift_2(vex::PORT8, vex::gearSetting::ratio18_1, true);

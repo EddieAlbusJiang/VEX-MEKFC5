@@ -2,6 +2,8 @@
 
 #include "vex.h"
 
+class Odometry;
+
 // Holonomic "X-drive": four drive wheels mounted at 45 degrees with their axes
 // pointing toward the robot center. The four wheels can be combined linearly to
 // produce translation in any direction plus in-place rotation.
@@ -16,6 +18,7 @@ class XDrive {
     vex::motor& l2_;
     vex::motor& r1_;
     vex::motor& r2_;
+    Odometry& odom_; // position/heading source for the auto routines
 
     // Per-axis gains, applied before mixing. Lets a weak axis be scaled up
     // without touching the mixing math. Default 1.0.
@@ -46,8 +49,12 @@ class XDrive {
     // value applied (zero when held/stopped).
     double applyMotor(vex::motor& motor, bool& held, double output);
 
+    // Blocking auto routines. Targets are in the odometry (power-up) frame.
+    void runMove(double target_x, double target_y, double speed);
+    void runRotate(double target_deg, double speed);
+
   public:
-    XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2,
+    XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2, Odometry& odom,
            double forward_gain = 1.0, double lateral_gain = 1.0, double rotational_gain = 1.0);
 
     // Adjust the per-axis gains at runtime.
@@ -76,4 +83,11 @@ class XDrive {
 
     // Stop all drive motors.
     void stop(vex::brakeType type = vex::brakeType::coast);
+
+    // ----- Autonomous helpers (blocking; drive to a target, then hold) -----
+    // Targets/offsets are in the odometry frame (origin = power-up position).
+    void AutoMoveTo(double target_x, double target_y, double speed = P_AUTO_SPEED);
+    void AutoMoveFor(double diff_x, double diff_y, double speed = P_AUTO_SPEED);
+    void AutoRotateTo(double target_deg, double speed = P_AUTO_SPEED);
+    void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
 };

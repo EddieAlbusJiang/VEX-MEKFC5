@@ -1,6 +1,7 @@
 #include "lift.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 Lift::Lift(vex::motor_group& motors, double min_angle, double max_angle, double speed)
@@ -42,3 +43,44 @@ void Lift::stop() { motors_.stop(vex::brakeType::hold); }
 void Lift::resetPosition() { motors_.resetPosition(); }
 
 void Lift::setSpeed(double speed) { speed_ = std::max(0.0, std::min(speed, 100.0)); }
+
+void Lift::runToAngle(double target_deg, double speed) {
+    // Clamp the target within the reachable range.
+    target_deg = std::max(min_angle_, std::min(target_deg, max_angle_));
+
+    const double prev_speed = speed_;
+    setSpeed(speed);
+
+    vex::timer timer;
+    vex::timer settle;
+    while (timer.time() < P_MECH_TIMEOUT_MS) {
+        const double pos = position();
+        const double err = target_deg - pos;
+
+        if (std::fabs(err) <= P_LIFT_TOL) {
+            motors_.stop(vex::brakeType::hold);
+            if (settle.time() >= P_MECH_SETTLE_MS) {
+                break;
+            }
+        } else if ((err > 0.0 && pos >= max_angle_) || (err < 0.0 && pos <= min_angle_)) {
+            motors_.stop(vex::brakeType::hold); // blocked by a limit before reaching target
+            break;
+        } else {
+            settle.reset();
+            const double sign = (err > 0.0) ? 1.0 : -1.0;
+            motors_.spin(vex::directionType::fwd, sign * speed_, vex::velocityUnits::pct);
+        }
+        vex::this_thread::sleep_for(10);
+    }
+
+    motors_.stop(vex::brakeType::hold);
+    setSpeed(prev_speed);
+}
+
+void Lift::AutoLiftTo(double target_deg, double speed) { runToAngle(target_deg, speed); }
+
+void Lift::AutoLiftFor(double delta_deg, double speed) { runToAngle(position() + delta_deg, speed); }
+
+void Lift::AutoLiftUp(double speed) { runToAngle(max_angle_, speed); }
+
+void Lift::AutoLiftDown(double speed) { runToAngle(min_angle_, speed); }
