@@ -4,6 +4,9 @@
 
 void autonomous() {
     Debug::Log("[Auto] start", Debug::LogLevel::Info);
+    Controller.Screen.clearScreen();
+    Controller.Screen.setCursor(2, 1);
+    Controller.Screen.print("Autonomous Override");
     
     vex::timer timer;
     // Mark the autonomous phase so driverControl() stops commanding hardware.
@@ -38,5 +41,6 @@ void autonomous() {
     printf(" [AUTON] Time: %dms\n", timer.time());
     Chassis.setIdleBrake(true);
     Auto_Active = false;
+    Controller.Screen.clearScreen();
     Debug::Log("[Auto] done", Debug::LogLevel::Info);
 }

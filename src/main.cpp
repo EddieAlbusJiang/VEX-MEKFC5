@@ -20,7 +20,6 @@ void initialize() {
     HiIO::BrainScreen::setBrain(Brain);
     Controller.Screen.clearScreen();
     Debug::Log("[Main] MEKFC5 Starting Up...", Debug::LogLevel::Info);
-
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Odom.calibrate()) {
         vex::this_thread::sleep_for(10);
@@ -39,6 +38,9 @@ void initialize() {
     // the clamp manually opened before power-up.
     Mech_Lift.resetPosition();
     Mech_Clamp.resetPosition();
+    Debug::Log("[Main] Initialized.", Debug::LogLevel::Info);
+    Controller.Screen.setCursor(1, 1);
+    Controller.Screen.print("Initialized.");
 }
 
 int main() {

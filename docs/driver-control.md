@@ -60,7 +60,7 @@ sleep 10ms
 | 行 | 格式 | 内容 |
 |---|---|---|
 | Row1 | `Lf%02d Lb%02d Rf%02d Rb%02d` | 四轮最终下发速度（|pct|，≤99） |
-| Row2 | `Lift%4d  Clamp%4d` | 升降/夹爪角度（deg） |
+| Row2 | `He%3d Lt%4d Cp%4d` | 朝向 Heading（deg）+ 升降 Lift + 夹爪 Clamp 角度（deg，钳制 4 字符） |
 | Row3 | `%s%4d,%4d %c%c%03d` | 前缀 `Man `（调试模式为 `ROOT`）+ 轮式里程计 x,y（cm，钳制 4 字符）+ 轴锁定 `A`/空格 + 驾驶模式 `X`/`Y` + 秒（`%03d`） |
 
 - 每个字段定宽，直接覆盖旧字符，无需清屏。

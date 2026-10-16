@@ -256,10 +256,11 @@ void updateControllerScreen() {
                   magnitude2(Chassis.wheelOutput(0)), magnitude2(Chassis.wheelOutput(1)),
                   magnitude2(Chassis.wheelOutput(2)), magnitude2(Chassis.wheelOutput(3)));
 
-    // Row 2: mechanism angles in degrees, 4 digits.
-    snprintf(row2, sizeof(row2), "Lift%4d  Clamp%4d",
-                  static_cast<int>(std::lround(Mech_Lift.position())),
-                  static_cast<int>(std::lround(Mech_Clamp.position())));
+    // Row 2: heading + mechanism angles in degrees (He/Lt/Cp).
+    snprintf(row2, sizeof(row2), "He%3d Lt%4d Cp%4d",
+                  static_cast<int>(std::lround(Odom.heading())),
+                  clamp4(Mech_Lift.position()),
+                  clamp4(Mech_Clamp.position()));
 
     // Row 3: wheel-odometry position (x forward, y right, cm), axis-lock flag,
     // drive mode, and elapsed time (seconds).
