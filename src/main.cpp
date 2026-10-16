@@ -40,7 +40,7 @@ void initialize() {
     Mech_Clamp.resetPosition();
     Debug::Log("[Main] Initialized.", Debug::LogLevel::Info);
     Controller.Screen.setCursor(1, 1);
-    Controller.Screen.print("Initialized.");
+    Controller.Screen.print("Hi Summoner!");
 }
 
 int main() {
