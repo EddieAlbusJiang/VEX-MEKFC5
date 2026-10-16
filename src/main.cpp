@@ -49,7 +49,7 @@ int main() {
     Competition.autonomous(autonomous);
     Competition.drivercontrol(driverControl);
     HiTest(); // displacement unit test (blocks)
-    autonomous();
+    // autonomous();
     driverControl();
     // Keep the program alive so competition control can dispatch callbacks.
     while (true) {

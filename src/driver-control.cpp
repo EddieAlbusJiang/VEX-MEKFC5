@@ -12,6 +12,12 @@ constexpr double kDeadZone = 2.0;
 constexpr int kScreenRefreshMs = 150;
 // Time since driverControl() started; reset on entry.
 vex::timer control_timer;
+// Screen-refresh throttle base; reset together with control_timer on entry.
+int last_refresh_ms = -kScreenRefreshMs;
+// Singleton guard: only one driverControl loop may run (main's direct call vs
+// the Competition drivercontrol callback).
+vex::mutex driver_guard_mutex;
+bool driver_running = false;
 
 // Drive reference frame.
 //   HeadingUp (mode 1): joystick forward follows the robot's current heading.
@@ -90,8 +96,18 @@ bool consumeRunAutonomous() {
 } // namespace
 
 void driverControl() {
+    // Only one driverControl loop may run.
+    driver_guard_mutex.lock();
+    if (driver_running) {
+        driver_guard_mutex.unlock();
+        return;
+    }
+    driver_running = true;
+    driver_guard_mutex.unlock();
+
     Debug::Log("[DriverControl] Manual Control Override.\n", Debug::LogLevel::Debug);
     control_timer.reset();
+    last_refresh_ms = -kScreenRefreshMs;
 
     // Register the drive-mode and heading-reset button callbacks once.
     static bool callbacks_registered = false;
@@ -181,7 +197,6 @@ void updateControllerScreen() {
     const int now_ms = control_timer.time();
 
     // Throttle the (slow) screen writes.
-    static int last_refresh_ms = -kScreenRefreshMs;
     if (now_ms - last_refresh_ms < kScreenRefreshMs) {
         return;
     }

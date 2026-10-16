@@ -67,6 +67,8 @@ sleep 10ms
 
 ## 备注
 
+- **单例守卫**：`driverControl()` 通过互斥锁保证全程序只运行**一个**循环（`main()` 直调与 `Competition` 自动调用不会重复启动）。
+- **屏幕刷新节流**：`last_refresh_ms` 与 `control_timer` 在入口一起重置，避免计时器重置导致的长时间不刷新（冻屏）。
 - **自动阶段互斥**：当 `Auto_Active`（自动阶段进行中）为真时，主循环**跳过** `serviceHeadingReset/updateChassis/updateLift/updateClamp`，仅刷新屏幕，避免与 `autonomous()` 抢占硬件。
 - 驾驶模式与轴锁定是**两个独立设定**，仅共用同一把互斥锁。
 - `updateLift/updateClamp` 在无按键时调用各机构 `stop()`（升降 hold；夹爪 hold/锁定）。

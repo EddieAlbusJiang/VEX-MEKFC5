@@ -10,7 +10,7 @@
 
 // ===== Clamp =====
 #define P_CLAMP_OPEN_ANGLE 40.0
-#define P_CLAMP_CLOSE_ANGLE (-40.0)
+#define P_CLAMP_CLOSE_ANGLE (-50.0)
 #define P_CLAMP_SPEED 20.0
 #define P_CLAMP_TOLERANCE 1.0
 #define P_CLAMP_PID_KP 0.5
@@ -49,4 +49,4 @@
 #define P_MECH_HYSTERESIS 2.0 // deg; extra margin before re-engaging after hold
 
 // ===== Driver input =====
-#define P_DRIVE_CURVE_EXP 1.5 // exponent k for f(x)=sign(x)*|x/100|^k*100
+#define P_DRIVE_CURVE_EXP 1.9 // exponent k for f(x)=sign(x)*|x/100|^k*100
