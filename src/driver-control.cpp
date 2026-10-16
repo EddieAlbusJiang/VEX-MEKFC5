@@ -20,7 +20,7 @@ enum class DriveMode : int { HeadingUp = 1, NorthUp = 2 };
 DriveMode drive_mode = DriveMode::HeadingUp; // default mode 1
 vex::mutex drive_mode_mutex;                 // shared with the button callbacks
 bool heading_reset_requested = false;
-// Axis-aligned translation (Button B): keep only the dominant translation axis.
+// Axis-aligned translation (Button A): keep only the dominant translation axis.
 bool axis_lock_enabled = false;
 
 DriveMode getDriveMode() {
@@ -78,7 +78,7 @@ void driverControl() {
     if (!callbacks_registered) {
         Controller.ButtonX.pressed(onModeToggle);
         Controller.ButtonY.pressed(onHeadingReset);
-        Controller.ButtonB.pressed(onAxisLockToggle);
+        Controller.ButtonA.pressed(onAxisLockToggle);
         callbacks_registered = true;
     }
 

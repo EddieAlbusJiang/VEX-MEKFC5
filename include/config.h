@@ -5,12 +5,12 @@
 
 // ===== Lift =====
 #define P_LIFT_MIN_ANGLE 0.0
-#define P_LIFT_MAX_ANGLE 1250.0
-#define P_LIFT_SPEED 30.0
+#define P_LIFT_MAX_ANGLE 2350.0
+#define P_LIFT_SPEED 33.0
 
 // ===== Clamp =====
 #define P_CLAMP_OPEN_ANGLE 40.0
-#define P_CLAMP_CLOSE_ANGLE (-10.0)
+#define P_CLAMP_CLOSE_ANGLE (-40.0)
 #define P_CLAMP_SPEED 20.0
 #define P_CLAMP_TOLERANCE 1.0
 #define P_CLAMP_PID_KP 0.9
