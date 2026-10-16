@@ -24,14 +24,23 @@ void   resetPosition();    // 当前角度置 0（开机复位）
 void   setSpeed(double speed); // 钳制 [0,100]
 ```
 
-## 自动接口（阻塞）
+## 自动接口（阻塞 / 非阻塞双签名）
 
 ```cpp
+// 阻塞
 void AutoLiftTo(double target_deg, double speed = P_LIFT_SPEED);
-void AutoLiftFor(double delta_deg,  double speed = P_LIFT_SPEED);
-void AutoLiftUp(double speed = P_LIFT_SPEED);    // → max_angle_
-void AutoLiftDown(double speed = P_LIFT_SPEED);  // → min_angle_
+void AutoLiftFor(double delta_deg, double speed = P_LIFT_SPEED);
+void AutoLiftUp(double speed = P_LIFT_SPEED);
+void AutoLiftDown(double speed = P_LIFT_SPEED);
+// 非阻塞（回调倒数第二、可为 nullptr；speed 末参）
+void AutoLiftTo(double target_deg, void (*onDone)(void), double speed = P_LIFT_SPEED);
+void AutoLiftFor(double delta_deg, void (*onDone)(void), double speed = P_LIFT_SPEED);
+void AutoLiftUp(void (*onDone)(void), double speed = P_LIFT_SPEED);
+void AutoLiftDown(void (*onDone)(void), double speed = P_LIFT_SPEED);
 ```
+
+- 非阻塞版入队即返回，由本类 worker 线程执行，完成时调用 `onDone`；队列满则丢弃。
+- ⚠️ 禁止在回调中调用阻塞版 Auto（死锁）。
 
 内部 `runToAngle(target, speed)`：
 

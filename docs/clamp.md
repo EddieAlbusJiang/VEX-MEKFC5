@@ -46,6 +46,24 @@ void AutoClampOpen(double speed = P_CLAMP_SPEED);   // → open_angle_
 void AutoClampClose(double speed = P_CLAMP_SPEED);  // → close_angle_
 ```
 
+## 自动接口（阻塞 / 非阻塞双签名）
+
+```cpp
+// 阻塞
+void AutoClampTo(double target_deg, double speed = P_CLAMP_SPEED);
+void AutoClampFor(double delta_deg, double speed = P_CLAMP_SPEED);
+void AutoClampOpen(double speed = P_CLAMP_SPEED);
+void AutoClampClose(double speed = P_CLAMP_SPEED);
+// 非阻塞（回调倒数第二、可为 nullptr；speed 末参）
+void AutoClampTo(double target_deg, void (*onDone)(void), double speed = P_CLAMP_SPEED);
+void AutoClampFor(double delta_deg, void (*onDone)(void), double speed = P_CLAMP_SPEED);
+void AutoClampOpen(void (*onDone)(void), double speed = P_CLAMP_SPEED);
+void AutoClampClose(void (*onDone)(void), double speed = P_CLAMP_SPEED);
+```
+
+- 非阻塞版入队即返回，由本类 worker 线程执行，完成时调用 `onDone`；队列满则丢弃。
+- ⚠️ 禁止在回调中调用阻塞版 Auto（死锁）。
+
 内部 `runToAngle(target, speed)`（恒速 + 临近减速，不复用锁定 PID）：
 
 1. 目标钳制到 `[close, open]`。
@@ -63,6 +81,6 @@ void AutoClampClose(double speed = P_CLAMP_SPEED);  // → close_angle_
 
 ## 备注
 
-- 开机前手动把夹爪置于张开，`initialize()` 中 `resetPosition()` 建立零点。
+- 开机前手动把夹爪置于张开；`initialize()` 中调用 `assumeOpen()`，把当前角度读数**视为最大角**（`open_angle_`），并同步锁定目标、清 PID/lock。
 - 停止模式固定 hold（满足“中间位置锁死”需求）。
 - **Root 模式（`ButtonLeft`）**：`Root_Mode` 为真时，**手动** `moveBy`/`stop` 忽略软限位（可越过限位）；退出该模式时 `resetPosition()`。自动 `runToAngle` 不受影响。

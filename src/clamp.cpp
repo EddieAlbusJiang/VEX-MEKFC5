@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <cmath>
 
+Clamp* Clamp::s_instance_ = nullptr;
+constexpr int Clamp::kQueueSize;
+
 Clamp::Clamp(vex::motor& motor, double open_angle, double close_angle, double speed)
     : motor_(motor), open_angle_(open_angle), close_angle_(close_angle),
       pid_(PIDParam{P_CLAMP_PID_KP, P_CLAMP_PID_KD, P_CLAMP_PID_KI}) {
@@ -93,6 +96,13 @@ void Clamp::resetPosition() {
     locking_ = false;
 }
 
+void Clamp::assumeOpen() {
+    motor_.setPosition(open_angle_, vex::rotationUnits::deg); // current angle = max (open)
+    locked_position_ = open_angle_;                            // keep the lock target in sync
+    pid_.reset();
+    locking_ = false;
+}
+
 void Clamp::setSpeed(double speed) { speed_ = std::max(0.0, std::min(speed, 100.0)); }
 
 void Clamp::setLockTolerance(double tolerance) { tolerance_ = std::fabs(tolerance); }
@@ -145,10 +155,120 @@ void Clamp::runToAngle(double target_deg, double speed) {
     setSpeed(prev_speed);
 }
 
-void Clamp::AutoClampTo(double target_deg, double speed) { runToAngle(target_deg, speed); }
+void Clamp::AutoClampTo(double target_deg, double speed) { blockingAuto(AutoKind::To, target_deg, speed); }
 
-void Clamp::AutoClampFor(double delta_deg, double speed) { runToAngle(position() + delta_deg, speed); }
+void Clamp::AutoClampFor(double delta_deg, double speed) { blockingAuto(AutoKind::For, delta_deg, speed); }
 
-void Clamp::AutoClampOpen(double speed) { runToAngle(open_angle_, speed); }
+void Clamp::AutoClampOpen(double speed) { blockingAuto(AutoKind::Open, 0.0, speed); }
 
-void Clamp::AutoClampClose(double speed) { runToAngle(close_angle_, speed); }
+void Clamp::AutoClampClose(double speed) { blockingAuto(AutoKind::Close, 0.0, speed); }
+
+// ---------------------------------------------------------------------------
+// Auto command queue + worker thread (see x-drive.cpp for the same pattern).
+// Blocking overloads enqueue and wait (ticket); non-blocking overloads enqueue
+// (dropping when full) and return. NOTE: do NOT call a blocking Auto from
+// inside a callback (deadlock).
+// ---------------------------------------------------------------------------
+
+void Clamp::workerTrampoline() { s_instance_->autoWorkerLoop(); }
+
+void Clamp::ensureAutoWorker() {
+    if (auto_worker_started_) {
+        return;
+    }
+    auto_queue_mutex_.lock();
+    if (!auto_worker_started_) {
+        s_instance_ = this;
+        new vex::thread(&Clamp::workerTrampoline);
+        auto_worker_started_ = true;
+    }
+    auto_queue_mutex_.unlock();
+}
+
+int Clamp::enqueueAuto(const AutoCmd& cmd) {
+    int ticket = -1;
+    auto_queue_mutex_.lock();
+    if (auto_count_ < kQueueSize) {
+        auto_queue_[auto_tail_] = cmd;
+        auto_tail_ = (auto_tail_ + 1) % kQueueSize;
+        ++auto_count_;
+        ticket = ++auto_enqueued_;
+    }
+    auto_queue_mutex_.unlock();
+    return ticket;
+}
+
+void Clamp::blockingAuto(AutoKind kind, double a, double speed) {
+    ensureAutoWorker();
+    const AutoCmd cmd{kind, a, 0.0, speed, nullptr};
+    int ticket = -1;
+    do {
+        ticket = enqueueAuto(cmd);
+        if (ticket < 0) {
+            vex::this_thread::sleep_for(10);
+        }
+    } while (ticket < 0);
+    while (auto_completed_ < ticket) {
+        vex::this_thread::sleep_for(10);
+    }
+}
+
+void Clamp::autoWorkerLoop() {
+    while (true) {
+        AutoCmd cmd{};
+        bool have = false;
+        auto_queue_mutex_.lock();
+        if (auto_count_ > 0) {
+            cmd = auto_queue_[auto_head_];
+            auto_head_ = (auto_head_ + 1) % kQueueSize;
+            --auto_count_;
+            have = true;
+        }
+        auto_queue_mutex_.unlock();
+
+        if (!have) {
+            vex::this_thread::sleep_for(10);
+            continue;
+        }
+
+        switch (cmd.kind) {
+            case AutoKind::To:
+                runToAngle(cmd.a, cmd.speed);
+                break;
+            case AutoKind::For:
+                runToAngle(position() + cmd.a, cmd.speed);
+                break;
+            case AutoKind::Open:
+                runToAngle(open_angle_, cmd.speed);
+                break;
+            case AutoKind::Close:
+                runToAngle(close_angle_, cmd.speed);
+                break;
+        }
+
+        ++auto_completed_;
+        if (cmd.cb != nullptr) {
+            cmd.cb();
+        }
+    }
+}
+
+void Clamp::AutoClampTo(double target_deg, void (*onDone)(void), double speed) {
+    ensureAutoWorker();
+    enqueueAuto(AutoCmd{AutoKind::To, target_deg, 0.0, speed, onDone}); // drop if full
+}
+
+void Clamp::AutoClampFor(double delta_deg, void (*onDone)(void), double speed) {
+    ensureAutoWorker();
+    enqueueAuto(AutoCmd{AutoKind::For, delta_deg, 0.0, speed, onDone});
+}
+
+void Clamp::AutoClampOpen(void (*onDone)(void), double speed) {
+    ensureAutoWorker();
+    enqueueAuto(AutoCmd{AutoKind::Open, 0.0, 0.0, speed, onDone});
+}
+
+void Clamp::AutoClampClose(void (*onDone)(void), double speed) {
+    ensureAutoWorker();
+    enqueueAuto(AutoCmd{AutoKind::Close, 0.0, 0.0, speed, onDone});
+}

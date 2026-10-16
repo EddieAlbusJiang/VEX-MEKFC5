@@ -50,14 +50,35 @@ void stop(vex::brakeType type = vex::brakeType::coast);
 
 ## 自动位移/旋转（阻塞）
 
+## 自动位移/旋转（阻塞 / 非阻塞双签名）
+
 目标坐标位于**里程计坐标系**（开机系，原点=开机位置，cm）。
 
+**阻塞版（无回调）**
 ```cpp
 void AutoMoveTo(double target_x, double target_y, double speed = P_AUTO_SPEED);
 void AutoMoveFor(double diff_x, double diff_y, double speed = P_AUTO_SPEED);
 void AutoRotateTo(double target_deg, double speed = P_AUTO_SPEED);
 void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
 ```
+**非阻塞版（回调为倒数第二参、必填，可为 `nullptr`；`speed` 末参）**
+```cpp
+void AutoMoveTo(double target_x, double target_y, void (*onDone)(void), double speed = P_AUTO_SPEED);
+void AutoMoveFor(double diff_x, double diff_y, void (*onDone)(void), double speed = P_AUTO_SPEED);
+void AutoRotateTo(double target_deg, void (*onDone)(void), double speed = P_AUTO_SPEED);
+void AutoRotateFor(double diff_deg, void (*onDone)(void), double speed = P_AUTO_SPEED);
+```
+- **非阻塞**：入队后立即返回；由**本类的 worker 线程**执行；完成时调用 `onDone`（若非空）。队列满则**丢弃**。相对动作 `*For` 在**执行时**以当前里程计位姿为基准。
+- **阻塞**：同样经队列（入队 + 票据等待），由 worker 执行；因此天然与队列串行、可排队。
+- ⚠️ **禁止在回调中调用阻塞版 Auto**（回调运行于 worker 线程，会造成死锁）。本项目无重入场景。
+
+**特快位移（无 PID，仅阻塞）**
+```cpp
+void AutoFastMoveFor(double diff_x, double diff_y);
+```
+- 沿**世界系**相对位移 `(diff_x, diff_y)` 以**允许的最大速度**移动（上限 = `P_XDRIVE_MAX_OUTPUT × 100%`，与传值 >100 无关）；**无 PID、无减速、不保持朝向**（`rot=0`）。
+- 判定：`|剩余| < P_AUTO_POS_TOL` 即停（或 `P_AUTO_TIMEOUT_MS` 超时）；结束 `stop(hold)`。
+- 经命令队列由 worker 执行（与其它 Auto 串行）。
 
 `runMove(tx,ty,speed)`：
 
@@ -78,4 +99,4 @@ void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
 
 ## 相关宏（`config.h`）
 
-`P_XDRIVE_MAX_OUTPUT`、`P_XDRIVE_MIN_OUTPUT`、`P_XDRIVE_HYSTERESIS`、`P_AUTO_SPEED`、`P_AUTO_POS_TOL`、`P_AUTO_ANGLE_TOL`、`P_AUTO_TIMEOUT_MS`、`P_AUTO_SETTLE_MS`、`P_AUTO_MOVE_PID_*`、`P_AUTO_ROT_PID_*`。
+`P_XDRIVE_MAX_OUTPUT`、`P_XDRIVE_MIN_OUTPUT`、`P_XDRIVE_HYSTERESIS`、`P_AUTO_SPEED`、`P_AUTO_POS_TOL`、`P_AUTO_ANGLE_TOL`、`P_AUTO_TIMEOUT_MS`、`P_AUTO_SETTLE_MS`、`P_AUTO_MIN_OUTPUT`、`P_AUTO_MOVE_PID_*`、`P_AUTO_ROT_PID_*`、`P_AUTO_QUEUE`。

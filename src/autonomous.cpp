@@ -25,31 +25,73 @@ void autonomous() {
     //   Chassis.AutoRotateTo(90.0);         // rotate to heading 90 deg
     //   Chassis.AutoMoveFor(-50.0, 0.0);    // relative move
     //   Chassis.AutoRotateFor(-90.0);       // relative rotate
-    Mech_Clamp.AutoClampOpen();
-    Chassis.AutoMoveTo(0.0, -6.0);          // Clear Point
-    Chassis.AutoMoveTo(47.0, -6.0);         // Pin 1
-    Chassis.AutoMoveTo(47.0, 2.0);          // Approach
-    Mech_Clamp.AutoClampClose();
-    Mech_Lift.AutoLiftTo(1812);
-    Chassis.AutoRotateTo(-90.0);
-    // Chassis.AutoMoveTo(47.0, -6.0);
-    Chassis.AutoMoveTo(17.0, -6.0); 
-    Chassis.AutoMoveTo(17.0, -27.0);
-    Chassis.AutoMoveTo(34.0, -27.0);
-    Mech_Clamp.AutoClampOpen();
-    // Second Stage
-    Chassis.AutoMoveTo(4, -25);             // Clear Point
-    Chassis.AutoRotateTo(0);
-    Chassis.AutoMoveTo(-40, 1);             // Pin 2
-    Chassis.AutoMoveTo(-40, 10);            // Approach
-    Mech_Lift.AutoLiftFor(0);
-    Mech_Clamp.AutoClampClose();
-    Mech_Lift.AutoLiftFor(1812);
-    Chassis.AutoMoveTo(-40, -2);
-    Chassis.AutoRotateTo(-180);
-    Mech_Clamp.AutoClampOpen();
 
+    // First Stage
+    // Mech_Clamp.AutoClampOpen();
+    // Chassis.AutoMoveTo(0.0, -9.0);          // Clear Point
+    // Chassis.AutoMoveTo(47.0, -9.0);         // Pin 1
+    // Chassis.AutoMoveTo(47.0, -1.0);          // Approach
+    // Mech_Clamp.AutoClampClose();
+    // Mech_Lift.AutoLiftTo(1812, nullptr);
+    // Chassis.AutoRotateTo(-90.0);
+    // // Chassis.AutoMoveTo(47.0, -6.0);  //deserted
+    // Chassis.AutoMoveTo(17.0, -9.0); 
+    // Chassis.AutoMoveTo(34.0, -30.0);
+    // Mech_Clamp.AutoClampOpen();
+
+    // First Stage Optimized        // -3
+    Mech_Clamp.AutoClampOpen();
+    Mech_Lift.AutoLiftTo(30, nullptr);
+    Chassis.AutoMoveTo(0.0, -9.0);          // Clear Point
+    Chassis.AutoMoveTo(47.0, -9.0);         // Pin 1
+    Chassis.AutoMoveTo(47.0, -1.5);          // Approach
+    Mech_Clamp.AutoClampClose();
+    Mech_Lift.AutoLiftTo(1812, nullptr);
+    Chassis.AutoRotateTo(-180, 45);
+    Chassis.AutoMoveTo(47.0, -17);
+    Mech_Clamp.AutoClampOpen();
+    Chassis.AutoMoveTo(47.0, -14);
+
+    // Second Stage
+    // Chassis.AutoMoveTo(4, -28);             // Clear Point
+    // Chassis.AutoRotateTo(0);
+    // Chassis.AutoMoveTo(-40, -2);             // Pin 2
+    // Chassis.AutoMoveTo(-40, 7);            // Approach
+    // Mech_Lift.AutoLiftFor(0); 
+    // Mech_Clamp.AutoClampClose();
+    // Mech_Lift.AutoLiftTo(1812, nullptr);
+    // Chassis.AutoMoveTo(-40, -5);
+    // Chassis.AutoRotateTo(-180);
+    // Mech_Clamp.AutoClampOpen();
+
+    // Second Stage Optimized
+    // Mech_Lift.AutoLiftTo(30, nullptr);
+    // Chassis.AutoMoveTo(-47.0, -14.0);
+    // Chassis.AutoMoveTo(-54.0, -13.0);
+    // Chassis.AutoRotateTo(0);
+    // Chassis.AutoMoveTo(-54.0, -11.0);
+    // Mech_Clamp.AutoClampClose();
+    // Mech_Lift.AutoLiftTo(1812, nullptr);
+    // Chassis.AutoRotateTo(-180, 45);
+    // Chassis.AutoMoveTo(-54.0, -20);
+    // Mech_Clamp.AutoClampOpen();
     
+    // Third Stage Optimized (Not Toggling yet)
+    // Chassis.AutoMoveTo(-40.0, -6);
+    // Mech_Lift.AutoLiftTo(1812, nullptr);
+    // Chassis.AutoMoveTo(0, 2);
+    // Chassis.AutoRotateTo(0);
+
+    Chassis.AutoMoveTo(0, -14.0);
+    Chassis.AutoRotateTo(-180);
+    // Chassis.AutoMoveFor(0, 2.0);
+    Chassis.AutoMoveTo(0, -80.0);
+    Chassis.AutoFastMoveFor(0, 100);
+    Chassis.AutoFastMoveFor(0, -100);
+    // Chassis.AutoFastMoveFor(0, -20);
+    // Chassis.AutoFastMoveFor(0, 20);
+    // Chassis.AutoFastMoveFor(0, -20);
+
 
 
     printf(" [AUTON] Time: %dms\n", timer.time());

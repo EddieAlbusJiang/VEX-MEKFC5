@@ -49,6 +49,9 @@ bool getAxisLock() {
 }
 
 void onAxisLockToggle() {
+    if (!Root_Mode) {
+        return; // axis-lock is only available in Root mode
+    }
     drive_mode_mutex.lock();
     axis_lock_enabled = !axis_lock_enabled;
     drive_mode_mutex.unlock();
@@ -80,8 +83,8 @@ void serviceHeadingReset() {
 }
 
 void onRunAutonomous() {
-    if (Auto_Active) {
-        return; // ignore while an autonomous run is already in progress
+    if (!Root_Mode || Auto_Active) {
+        return; // manual autonomous trigger is only available in Root mode
     }
     drive_mode_mutex.lock();
     run_autonomous_requested = true;
@@ -113,9 +116,14 @@ void serviceRootToggle() {
     const bool was_on = Root_Mode;
     Root_Mode = !was_on;
     if (was_on) {
-        // Exiting Root mode: zero the mechanism positions.
+        // Exiting Root mode: zero the mechanism positions and force off the
+        // features that are only allowed while Root mode is active.
         Mech_Lift.resetPosition();
         Mech_Clamp.resetPosition();
+        drive_mode_mutex.lock();
+        axis_lock_enabled = false;
+        run_autonomous_requested = false;
+        drive_mode_mutex.unlock();
     }
 }
 } // namespace

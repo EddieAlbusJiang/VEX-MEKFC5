@@ -32,37 +32,47 @@ void autonomous() {
 
 ## 可用接口
 
-**底盘（`XDrive`，阻塞；坐标系=开机系、原点=开机位置、cm）**
+**每个 Auto 均有“阻塞 / 非阻塞”两种重载**：阻塞版形如 `AutoXxx(args..., speed = 默认)`；非阻塞版形如 `AutoXxx(args..., void (*onDone)(void), speed = 默认)`（回调可为 `nullptr`）——入队即返回，由各自 worker 线程执行，完成时回调。三类（底盘/升降/夹爪）各有一个 worker，**可并行**。
+
+**底盘（`XDrive`，坐标系=开机系、原点=开机位置、cm）**
 ```cpp
+// 阻塞
 Chassis.AutoMoveTo(tx, ty, speed = P_AUTO_SPEED);
 Chassis.AutoMoveFor(dx, dy, speed = P_AUTO_SPEED);
 Chassis.AutoRotateTo(tdeg, speed = P_AUTO_SPEED);
 Chassis.AutoRotateFor(ddeg, speed = P_AUTO_SPEED);
+// 特快位移：世界系相对位移、最大速度、无 PID、无减速、不保持朝向（仅阻塞）
+Chassis.AutoFastMoveFor(dx, dy);
+// 非阻塞
+Chassis.AutoMoveTo(tx, ty, onDone /*可为 nullptr*/, speed = P_AUTO_SPEED);
+// …其余同理
 ```
 
-**升降（`Lift`，阻塞）**
+**升降（`Lift`）**
 ```cpp
-Mech_Lift.AutoLiftTo(deg, speed = P_LIFT_SPEED);
-Mech_Lift.AutoLiftFor(ddeg, speed = P_LIFT_SPEED);
+Mech_Lift.AutoLiftTo(deg, speed = P_LIFT_SPEED);                 // 阻塞
+Mech_Lift.AutoLiftTo(deg, onDone, speed = P_LIFT_SPEED);         // 非阻塞
 Mech_Lift.AutoLiftUp(speed = P_LIFT_SPEED);
-Mech_Lift.AutoLiftDown(speed = P_LIFT_SPEED);
+Mech_Lift.AutoLiftUp(onDone, speed = P_LIFT_SPEED);
+// …
 ```
 
-**夹爪（`Clamp`，阻塞）**
+**夹爪（`Clamp`）**
 ```cpp
-Mech_Clamp.AutoClampTo(deg, speed = P_CLAMP_SPEED);
-Mech_Clamp.AutoClampFor(ddeg, speed = P_CLAMP_SPEED);
-Mech_Clamp.AutoClampOpen(speed = P_CLAMP_SPEED);
-Mech_Clamp.AutoClampClose(speed = P_CLAMP_SPEED);
+Mech_Clamp.AutoClampOpen(speed = P_CLAMP_SPEED);          // 阻塞
+Mech_Clamp.AutoClampOpen(onDone, speed = P_CLAMP_SPEED);  // 非阻塞
+// …
 ```
 
 ## 前置条件
 
-- 位移依赖里程计，`initialize()` 已完成：惯性校准、安装标定、原点复位，并启动了 `odometryThread`。
+- 位移依赖里程计，`initialize()` 已完成：惯性校准、原点复位（`resetWheel`），并启动了 `odometryThread`（IMU 位移已禁用）。
 - 升降/夹爪零点由 `initialize()` 的 `resetPosition()` 建立（开机前需手动复位）。
 
 ## 注意事项
 
-- 所有自动接口均为**阻塞**（含超时与到位稳定判定），按顺序调用即可串联多步。
+- **阻塞版**：含超时与到位稳定判定；按顺序调用即可串联多步（经队列由 worker 执行）。
+- **非阻塞版**：入队即返回；多子系统可并行；完成后回调通知；队列满（`P_AUTO_QUEUE`）则**丢弃**新请求。
+- ⚠️ **禁止在回调中调用阻塞版 Auto**（回调运行于 worker 线程，会与 worker 互等 → 死锁）。本项目无重入场景。
 - 位移使用**轮式里程计**位置；打滑、低速受阻可能导致超时。
-- 参数集中在 `config.h`（`P_AUTO_*`、`P_LIFT_TOL`、`P_CLAMP_*`、`P_MECH_*`）。
+- 参数集中在 `config.h`（`P_AUTO_*`、`P_LIFT_TOL`、`P_CLAMP_*`、`P_MECH_*`、`P_AUTO_QUEUE`）。

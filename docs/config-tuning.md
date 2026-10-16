@@ -59,15 +59,21 @@
 | `P_LIFT_TOL` | 2.0 | 升降到位容差（deg） |
 | `P_MECH_TIMEOUT_MS` | 4000 | 机构自动超时（ms） |
 | `P_MECH_SETTLE_MS` | 100 | 机构到稳定时长（ms） |
-| `P_MECH_DECEL_TOL` | 15.0 | 临近目标开始减速的距离（deg） |
-| `P_MECH_MIN_OUTPUT` | 8.0 | 机构最小有效输出（percent，防低速堵转） |
+| `P_MECH_DECEL_TOL` | 8.0 | 临近目标开始减速的距离（deg，作用于 Clamp/Lift 自动末端） |
+| `P_MECH_MIN_OUTPUT` | 12.0 | 机构最小有效输出（percent，防低速堵转；作用于 Clamp/Lift） |
 | `P_MECH_HYSTERESIS` | 2.0 | 到位后重新起动的附加余量（deg） |
 
 ## 驾驶输入
 
 | 宏 | 默认 | 含义 |
 |---|---|---|
-| `P_DRIVE_CURVE_EXP` | 1.5 | 摇杆输入曲线指数 `k`：`f(x)=sign(x)·|x/100|^k·100`（k=1 线性；k>1 小输入更柔和） |
+| `P_DRIVE_CURVE_EXP` | 1.9 | 摇杆输入曲线指数 `k`：`f(x)=sign(x)·|x/100|^k·100`（k=1 线性；k>1 小输入更柔和） |
+
+## Auto 命令队列
+
+| 宏 | 默认 | 含义 |
+|---|---|---|
+| `P_AUTO_QUEUE` | 4 | 每个子系统非阻塞 Auto 的**命令队列容量**（worker 线程环形缓冲）；满则丢弃新请求 |
 
 ## 其他常量
 

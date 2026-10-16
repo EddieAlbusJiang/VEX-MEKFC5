@@ -52,6 +52,34 @@ class XDrive {
     // Blocking auto routines. Targets are in the odometry (power-up) frame.
     void runMove(double target_x, double target_y, double speed);
     void runRotate(double target_deg, double speed);
+    // Fast move: full (allowed) speed toward a world-frame relative offset, no PID.
+    void runFastMove(double delta_x, double delta_y);
+
+    // ----- Non-blocking auto: command queue + worker thread -----
+    enum class AutoKind { MoveTo, MoveFor, RotateTo, RotateFor, FastFor };
+    struct AutoCmd {
+        AutoKind kind;
+        double a;
+        double b;
+        double speed;
+        void (*cb)(void);
+    };
+    static constexpr int kQueueSize = P_AUTO_QUEUE;
+    AutoCmd auto_queue_[kQueueSize];
+    int auto_head_ = 0;
+    int auto_tail_ = 0;
+    int auto_count_ = 0;
+    int auto_enqueued_ = 0;
+    volatile int auto_completed_ = 0;
+    bool auto_worker_started_ = false;
+    vex::mutex auto_queue_mutex_;
+    static XDrive* s_instance_;
+
+    void ensureAutoWorker();
+    void autoWorkerLoop();
+    int enqueueAuto(const AutoCmd& cmd); // ticket >=0, or -1 if full
+    void blockingAuto(AutoKind kind, double a, double b, double speed);
+    static void workerTrampoline();
 
   public:
     XDrive(vex::motor& l1, vex::motor& l2, vex::motor& r1, vex::motor& r2, Odometry& odom,
@@ -90,4 +118,15 @@ class XDrive {
     void AutoMoveFor(double diff_x, double diff_y, double speed = P_AUTO_SPEED);
     void AutoRotateTo(double target_deg, double speed = P_AUTO_SPEED);
     void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
+
+    // Special fast move: world-frame relative offset at the maximum allowed
+    // speed, no PID / no deceleration / no heading hold (blocking).
+    void AutoFastMoveFor(double diff_x, double diff_y);
+
+    // ----- Non-blocking variants: enqueue and return; onDone (may be null)
+    //       is called from the worker thread when the action completes. -----
+    void AutoMoveTo(double target_x, double target_y, void (*onDone)(void), double speed = P_AUTO_SPEED);
+    void AutoMoveFor(double diff_x, double diff_y, void (*onDone)(void), double speed = P_AUTO_SPEED);
+    void AutoRotateTo(double target_deg, void (*onDone)(void), double speed = P_AUTO_SPEED);
+    void AutoRotateFor(double diff_deg, void (*onDone)(void), double speed = P_AUTO_SPEED);
 };

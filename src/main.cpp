@@ -19,6 +19,7 @@ void initialize() {
     // resets its buffer), then emit one startup log to every enabled output.
     HiIO::BrainScreen::setBrain(Brain);
     Controller.Screen.clearScreen();
+    // Brain.Screen.setFillColor()
     Debug::Log("[Main] MEKFC5 Starting Up...", Debug::LogLevel::Info);
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Odom.calibrate()) {
@@ -34,10 +35,10 @@ void initialize() {
     Odom.resetWheel();
     static vex::thread odometry_task(odometryThread);
 
-    // Zero the upper mechanisms: the load is manually placed at the bottom and
-    // the clamp manually opened before power-up.
+    // Upper mechanisms at boot: the load is manually placed at the bottom; the
+    // clamp is manually opened, so treat it as being at its maximum angle.
     Mech_Lift.resetPosition();
-    Mech_Clamp.resetPosition();
+    Mech_Clamp.assumeOpen();
     Debug::Log("[Main] Initialized.", Debug::LogLevel::Info);
     Controller.Screen.setCursor(1, 1);
     Controller.Screen.print("Hi Summoner!");
@@ -52,7 +53,7 @@ int main() {
     Competition.drivercontrol(driverControl);
     HiTest(); // displacement unit test (blocks)
     // autonomous();
-    driverControl();
+    // driverControl();
     // Keep the program alive so competition control can dispatch callbacks.
     while (true) {
         vex::this_thread::sleep_for(10);

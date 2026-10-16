@@ -9,8 +9,8 @@
 #define P_LIFT_SPEED 33.0
 
 // ===== Clamp =====
-#define P_CLAMP_OPEN_ANGLE 42.0
-#define P_CLAMP_CLOSE_ANGLE (-50.0)
+#define P_CLAMP_OPEN_ANGLE 85.0
+#define P_CLAMP_CLOSE_ANGLE (-20.0)
 #define P_CLAMP_SPEED 20.0
 #define P_CLAMP_TOLERANCE 1.0
 #define P_CLAMP_PID_KP 0.5
@@ -23,7 +23,7 @@
 #define P_ODOM_WHEEL_RATIO 1.0
 
 // ===== XDrive =====
-#define P_XDRIVE_MAX_OUTPUT 0.7
+#define P_XDRIVE_MAX_OUTPUT 0.75
 #define P_XDRIVE_MIN_OUTPUT 1.0
 #define P_XDRIVE_HYSTERESIS 1.0
 
@@ -45,9 +45,12 @@
 #define P_LIFT_TOL 2.0        // deg (Clamp reuses P_CLAMP_TOLERANCE)
 #define P_MECH_TIMEOUT_MS 4000
 #define P_MECH_SETTLE_MS 100
-#define P_MECH_DECEL_TOL 15.0 // deg; start slowing within this distance of target
-#define P_MECH_MIN_OUTPUT 8.0 // percent; minimum effective drive to avoid stall
+#define P_MECH_DECEL_TOL 8.0  // deg; start slowing within this distance of target
+#define P_MECH_MIN_OUTPUT 12.0 // percent; minimum effective drive to avoid stall
 #define P_MECH_HYSTERESIS 2.0 // deg; extra margin before re-engaging after hold
 
 // ===== Driver input =====
 #define P_DRIVE_CURVE_EXP 1.9 // exponent k for f(x)=sign(x)*|x/100|^k*100
+
+// ===== Auto command queue =====
+#define P_AUTO_QUEUE 4 // ring-buffer capacity per subsystem (worker thread)
