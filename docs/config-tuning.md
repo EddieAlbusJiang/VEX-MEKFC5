@@ -62,6 +62,12 @@
 | `P_MECH_MIN_OUTPUT` | 8.0 | 机构最小有效输出（percent，防低速堵转） |
 | `P_MECH_HYSTERESIS` | 2.0 | 到位后重新起动的附加余量（deg） |
 
+## 驾驶输入
+
+| 宏 | 默认 | 含义 |
+|---|---|---|
+| `P_DRIVE_CURVE_EXP` | 1.5 | 摇杆输入曲线指数 `k`：`f(x)=sign(x)·|x/100|^k·100`（k=1 线性；k>1 小输入更柔和） |
+
 ## 其他常量
 
 - `TICK_MS`（在 `include/vex.h`，默认 10）：Clamp 位置锁定的 tick 补偿使用。

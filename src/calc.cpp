@@ -1,4 +1,5 @@
 #include "calc.h"
+#include "config.h"
 
 #include <cmath>
 
@@ -55,4 +56,9 @@ double approachSpeed(double max_speed, double error, double decel_tol, double mi
         cmd = max_speed;
     }
     return cmd;
+}
+
+double driveCurve(double input) {
+    const double n = input / 100.0;
+    return sgn(n) * std::pow(std::fabs(n), P_DRIVE_CURVE_EXP) * 100.0;
 }

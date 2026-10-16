@@ -42,7 +42,9 @@ sleep 10ms
 
 ## 输入
 
-- `Axis3`：前后；`Axis4`：横移；`Axis1`：原地转向（均经 `deadZone`，阈值 `kDeadZone`）。
+- `Axis3`：前后；`Axis4`：横移；`Axis1`：原地转向。
+- 处理顺序：**死区 `deadZone`（阈值 `kDeadZone`）→ 输入曲线 `driveCurve()` → （NorthUp）变换 → 轴锁定**。
+- 输入曲线：`f(x)=sign(x)·|x/100|^k·100`（`k = P_DRIVE_CURVE_EXP`，默认 1.5）；端点不变、单调、奇对称，小输入更细腻（下凸）。三轴均应用。
 
 ## 轴锁定（Button A）
 

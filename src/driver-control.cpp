@@ -127,9 +127,10 @@ void driverControl() {
 void updateChassis() {
     // Left stick: forward/backward (Axis3) and left/right translation (Axis4).
     // Right stick: horizontal axis (Axis1) rotates the robot in place.
-    const double f = deadZone(Controller.Axis3.position(), kDeadZone);
-    const double l = deadZone(Controller.Axis4.position(), kDeadZone);
-    const double r = deadZone(Controller.Axis1.position(), kDeadZone);
+    // Deadzone first, then the input curve (endpoint-preserving, finer near center).
+    const double f = driveCurve(deadZone(Controller.Axis3.position(), kDeadZone));
+    const double l = driveCurve(deadZone(Controller.Axis4.position(), kDeadZone));
+    const double r = driveCurve(deadZone(Controller.Axis1.position(), kDeadZone));
 
     double body_forward = f;
     double body_lateral = l;

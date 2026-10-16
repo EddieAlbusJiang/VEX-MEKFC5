@@ -47,3 +47,6 @@
 #define P_MECH_DECEL_TOL 15.0 // deg; start slowing within this distance of target
 #define P_MECH_MIN_OUTPUT 8.0 // percent; minimum effective drive to avoid stall
 #define P_MECH_HYSTERESIS 2.0 // deg; extra margin before re-engaging after hold
+
+// ===== Driver input =====
+#define P_DRIVE_CURVE_EXP 1.5 // exponent k for f(x)=sign(x)*|x/100|^k*100
