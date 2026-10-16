@@ -31,8 +31,8 @@ bool heading_reset_requested = false;
 bool axis_lock_enabled = false;
 // Debug: Button B requests a single run of the autonomous routine.
 bool run_autonomous_requested = false;
-// Debug: Button Left toggles the "limits off" mode for Clamp/Lift.
-bool debug_toggle_requested = false;
+// Root mode: Button Left toggles "limits off" for Clamp/Lift manual motion.
+bool root_toggle_requested = false;
 
 DriveMode getDriveMode() {
     drive_mode_mutex.lock();
@@ -96,24 +96,24 @@ bool consumeRunAutonomous() {
     return requested;
 }
 
-void onDebugToggle() {
+void onRootToggle() {
     drive_mode_mutex.lock();
-    debug_toggle_requested = true;
+    root_toggle_requested = true;
     drive_mode_mutex.unlock();
 }
 
-void serviceDebugToggle() {
+void serviceRootToggle() {
     drive_mode_mutex.lock();
-    const bool requested = debug_toggle_requested;
-    debug_toggle_requested = false;
+    const bool requested = root_toggle_requested;
+    root_toggle_requested = false;
     drive_mode_mutex.unlock();
     if (!requested) {
         return;
     }
-    const bool was_off = Debug_LimitsOff;
-    Debug_LimitsOff = !was_off;
-    if (was_off) {
-        // Exiting debug mode: zero the mechanism positions.
+    const bool was_on = Root_Mode;
+    Root_Mode = !was_on;
+    if (was_on) {
+        // Exiting Root mode: zero the mechanism positions.
         Mech_Lift.resetPosition();
         Mech_Clamp.resetPosition();
     }
@@ -141,7 +141,7 @@ void driverControl() {
         Controller.ButtonY.pressed(onHeadingReset);
         Controller.ButtonA.pressed(onAxisLockToggle);
         Controller.ButtonB.pressed(onRunAutonomous);
-        Controller.ButtonLeft.pressed(onDebugToggle);
+        Controller.ButtonLeft.pressed(onRootToggle);
         callbacks_registered = true;
     }
 
@@ -156,7 +156,7 @@ void driverControl() {
         // would fight the autonomous routine); keep the screen updated only.
         if (!Auto_Active) {
             serviceHeadingReset();
-            serviceDebugToggle();
+            serviceRootToggle();
             updateChassis();
             updateLift();
             updateClamp();
@@ -271,7 +271,7 @@ void updateControllerScreen() {
     const int y = clamp4(Odom.wheelY());
     const char axis_char = getAxisLock() ? 'A' : ' ';
     const char mode_char = (getDriveMode() == DriveMode::NorthUp) ? 'Y' : 'X';
-    const char* label = Debug_LimitsOff ? "ROOT" : "Man ";
+    const char* label = Root_Mode ? "ROOT" : "Man ";
     snprintf(row3, sizeof(row3), "%s%4d,%4d %c%c%03d", label, x, y, axis_char, mode_char, seconds);
                                   
     // Fixed-width fields overwrite the previous frame, so no clear is needed.

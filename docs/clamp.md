@@ -65,4 +65,4 @@ void AutoClampClose(double speed = P_CLAMP_SPEED);  // → close_angle_
 
 - 开机前手动把夹爪置于张开，`initialize()` 中 `resetPosition()` 建立零点。
 - 停止模式固定 hold（满足“中间位置锁死”需求）。
-- **调试模式（`ButtonLeft`）**：`Debug_LimitsOff` 为真时，**手动** `moveBy`/`stop` 忽略软限位（可越过限位）；退出该模式时 `resetPosition()`。自动 `runToAngle` 不受影响。
+- **Root 模式（`ButtonLeft`）**：`Root_Mode` 为真时，**手动** `moveBy`/`stop` 忽略软限位（可越过限位）；退出该模式时 `resetPosition()`。自动 `runToAngle` 不受影响。

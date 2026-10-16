@@ -2,7 +2,7 @@
 
 `include/odometry.h` / `src/odometry.cpp`
 
-一个类同时提供三样东西：**航向**、**轮式里程计位移**、**IMU 航位推算位移**。坐标为**开机系**（原点=开机位置，单位 cm）。
+提供**航向**与**轮式里程计位移**（坐标系=开机系，原点=开机位置，单位 cm）。**IMU 航位推算已禁用**（相关代码以 `#if 0` 保留，便于恢复）。
 
 ## 构造
 
@@ -41,7 +41,9 @@ void   resetWheel();
 - 首帧只做基准（`wheel_prev_`），不产生位移。
 - 实测需确认符号：前进→`wheelX` 增、右移→`wheelY` 增；若反，调整反解符号。
 
-## IMU 航位推算
+## IMU 航位推算（已禁用）
+
+> 该功能已通过 `#if 0` 禁用（`updateImu/imuX/imuY/resetImu` 及加速度积分、ZUPT、刹车暂停等）。以下为原设计说明，供恢复参考。
 
 ```cpp
 void   updateImu(bool drive_braked);
@@ -61,7 +63,9 @@ void   resetImu();
 
 > 限制：纯 IMU 二次积分漂移大，仅供短时/对比参考；实际位移以轮式里程计为主。
 
-## 安装姿态标定
+## 安装姿态标定（已禁用）
+
+> `calibrateImuBias()` 已随 IMU 位移一并禁用（属 IMU 位移路径）。以下为原设计说明。
 
 ```cpp
 void calibrateImuBias();
@@ -73,8 +77,8 @@ void calibrateImuBias();
 
 ## 线程与调用
 
-- `odometryThread()`（在 `initialize()` 启动）每 ~10ms 调用 `Odom.updateImu(Chassis.isBraking())` 与 `Odom.updateWheel()`。
-- `initialize()` 中先 `Odom.calibrate()` → `Odom.calibrateImuBias()` → `Odom.resetImu()/resetWheel()` 建立开机原点。
+- `odometryThread()`（在 `initialize()` 启动）每 ~10ms 调用 `Odom.updateWheel()`（`updateImu` 已注释禁用）。
+- `initialize()` 中 `Odom.calibrate()` → `Odom.resetWheel()` 建立零点（`calibrateImuBias/resetImu` 已禁用）。
 
 ## 相关宏
 

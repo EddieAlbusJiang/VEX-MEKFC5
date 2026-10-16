@@ -6,12 +6,12 @@
 #include <cmath>
 
 namespace {
+#if 0 // IMU displacement disabled
 constexpr double kGravity = 980.665;    // cm/s^2 per g
 constexpr double kAccelLpf = 0.2;       // first-order low-pass on world accel
 constexpr double kStillAccelEps = 0.03; // g, allowed deviation of |a| from 1g
 constexpr double kStillGyroEps = 2.0;   // deg/s
 constexpr int kStillFrames = 10;        // consecutive still frames before ZUPT
-constexpr int kOdomPeriodMs = 10;       // background update period
 constexpr int kCalibSamples = 50;       // gravity samples while stationary
 constexpr int kCalibPeriodMs = 10;      // calibration sample period
 // Yaw (forward-drive) calibration is temporarily disabled.
@@ -44,6 +44,9 @@ Vec3 readAccel(vex::inertial& inertial) {
             inertial.acceleration(vex::axisType::yaxis),
             inertial.acceleration(vex::axisType::zaxis)};
 }
+#endif // IMU displacement disabled
+
+constexpr int kOdomPeriodMs = 10; // background update period
 } // namespace
 
 Odometry::Odometry(vex::inertial& inertial, double coefficient,
@@ -74,6 +77,7 @@ bool Odometry::calibrate() {
     return stable;
 }
 
+#if 0 // IMU displacement disabled
 void Odometry::calibrateImuBias() {
     // 1) Average the gravity direction while the robot is stationary.
     Vec3 g_sum{0.0, 0.0, 0.0};
@@ -228,6 +232,7 @@ void Odometry::resetImu() {
     imu_prev_way_ = 0.0;
     imu_still_frames_ = 0;
 }
+#endif // IMU displacement disabled
 
 void Odometry::updateWheel() {
     const double d[4] = {
@@ -281,7 +286,7 @@ void Odometry::resetWheel() {
 
 void odometryThread() {
     while (true) {
-        Odom.updateImu(Chassis.isBraking());
+        // Odom.updateImu(Chassis.isBraking()); // IMU displacement disabled
         Odom.updateWheel();
         vex::this_thread::sleep_for(kOdomPeriodMs);
     }

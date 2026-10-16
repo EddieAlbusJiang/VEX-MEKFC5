@@ -24,7 +24,7 @@ sleep 10ms
 | `ButtonY` | 复位朝向（当前朝向→0） |
 | `ButtonA` | 轴锁定 开/关 |
 | `ButtonB` | 调试：跑一遍 `autonomous()`（运行中忽略） |
-| `ButtonLeft` | 调试模式开关：Clamp/Lift **手动运动不受软限位**；退出时两者位置清零 |
+| `ButtonLeft` | **Root 模式**开关：Clamp/Lift **手动运动不受软限位**；退出时两者位置清零 |
 | `ButtonUp` / `ButtonDown` | 升降 上升 / 下降 |
 | `ButtonR2` / `ButtonR1` | 夹爪 合紧 / 张开 |
 
@@ -68,7 +68,7 @@ sleep 10ms
 
 ## 备注
 
-- **调试模式（ButtonLeft）**：全局 `Debug_LimitsOff`；开启后 `Clamp`/`Lift` **手动**运动忽略软限位（自动 `runToAngle` 仍受限）；**退出时**对两者 `resetPosition()`（位置清零）。屏幕 Row3 前缀由 `Man ` 变为 `ROOT`。开关与退出重置在**主循环**服务（回调仅置位请求）。
+- **Root 模式（ButtonLeft）**：全局 `Root_Mode`；开启后 `Clamp`/`Lift` **手动**运动忽略软限位（自动 `runToAngle` 仍受限）；**退出时**对两者 `resetPosition()`（位置清零）。屏幕 Row3 前缀由 `Man ` 变为 `ROOT`。开关与退出重置在**主循环**服务（回调仅置位请求）。
 - **单例守卫**：`driverControl()` 通过互斥锁保证全程序只运行**一个**循环（`main()` 直调与 `Competition` 自动调用不会重复启动）。
 - **屏幕刷新节流**：`last_refresh_ms` 与 `control_timer` 在入口一起重置，避免计时器重置导致的长时间不刷新（冻屏）。
 - **自动阶段互斥**：当 `Auto_Active`（自动阶段进行中）为真时，主循环**跳过** `serviceHeadingReset/updateChassis/updateLift/updateClamp`，仅刷新屏幕，避免与 `autonomous()` 抢占硬件。

@@ -22,8 +22,8 @@ extern Odometry Odom;
 // hardware commands meanwhile to avoid fighting the autonomous routine.
 extern volatile bool Auto_Active;
 
-// Debug mode: when true, Clamp/Lift manual motion ignores software limits.
-extern volatile bool Debug_LimitsOff;
+// Root mode: when true, Clamp/Lift manual motion ignores software limits.
+extern volatile bool Root_Mode;
 
 extern XDrive Chassis;
 

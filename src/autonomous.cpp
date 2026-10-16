@@ -11,7 +11,7 @@ void autonomous() {
     // Zero the chassis pose and heading so the routine's absolute targets are
     // relative to the start of this autonomous run.
     Odom.resetRotation();
-    Odom.resetImu();
+    // Odom.resetImu();
     Odom.resetWheel();
     // Per-wheel idle-brake distorts holonomic motion, so disable it for the
     // whole autonomous routine and restore it at the end.
@@ -30,7 +30,7 @@ void autonomous() {
     Mech_Lift.AutoLiftFor(1812);
     Chassis.AutoRotateTo(-90.0);
     // Chassis.AutoMoveTo(47.0, -6.0);
-    Chassis.AutoMoveTo(17.0, -6.0);         // 
+    Chassis.AutoMoveTo(17.0, -6.0); 
     Chassis.AutoMoveTo(17.0, -27.0);
     Chassis.AutoMoveTo(34.0, -27.0);
     Mech_Clamp.AutoClampOpen();

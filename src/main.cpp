@@ -27,11 +27,11 @@ void initialize() {
     }
     Debug::Log("[Main] Inertial Sensor Calibrated.", Debug::LogLevel::Info);
 
-    // Sample the at-rest acceleration bias (car assumed stationary at power-up).
-    Odom.calibrateImuBias();
+    // IMU displacement disabled.
+    // Odom.calibrateImuBias();
 
     // Establish the odometry origin and start the background estimator.
-    Odom.resetImu();
+    // Odom.resetImu(); // IMU displacement disabled
     Odom.resetWheel();
     static vex::thread odometry_task(odometryThread);
 

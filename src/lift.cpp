@@ -23,13 +23,13 @@ bool Lift::atTop() const { return position() >= max_angle_; }
 
 void Lift::moveBy(int direction) {
     if (direction > 0) {
-        if (!Debug_LimitsOff && position() >= max_angle_) {
+        if (!Root_Mode && position() >= max_angle_) {
             stop();
             return;
         }
         motors_.spin(vex::directionType::fwd, speed_, vex::velocityUnits::pct);
     } else {
-        if (!Debug_LimitsOff && position() <= min_angle_) {
+        if (!Root_Mode && position() <= min_angle_) {
             stop();
             return;
         }

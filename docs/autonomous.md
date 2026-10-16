@@ -25,7 +25,7 @@ void autonomous() {
 }
 ```
 
-- **启动清零位姿**：`autonomous()` 起始处调用 `Odom.resetRotation()/resetImu()/resetWheel()`，把**朝向与里程计位置**归零，使例程中的**绝对目标**总是相对“本次自动的起点与朝向”（无论从场控、`ButtonB` 还是开机直调触发）。
+- **启动清零位姿**：`autonomous()` 起始处调用 `Odom.resetRotation()/resetWheel()`（IMU 位移已禁用，`resetImu` 已注释），把**朝向与轮式里程计位置**归零，使例程中的**绝对目标**总是相对“本次自动的起点与朝向”（无论从场控、`ButtonB` 还是开机直调触发）。
 - **阶段互斥**：`Auto_Active`（`instance.*` 中的 `volatile bool`）在自动阶段置位，`driverControl()` 见其为真时**不再命令底盘/机构**（仅刷新屏幕），避免与 `autonomous()` 互相打断。
 - **调试触发**：在手动阶段按 `ButtonB` 可**同步跑一遍** `autonomous()`（运行中再次按被忽略）；起止由 `autonomous()` 首尾的 `Debug::Log("[Auto] start/done")` 提示。
 - **idle-brake 在自动阶段首尾统一关闭/恢复**（避免逐轮锁死扭曲 holonomic 运动），不在自动函数内部单独开关。

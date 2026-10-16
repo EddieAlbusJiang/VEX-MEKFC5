@@ -6,12 +6,10 @@ namespace {
 // Unit test: print heading + wheel-odometry + IMU position every 500 ms.
 void displacementTest() {
     while (true) {
-        // Line 1: heading + wheel odometry + IMU integration.
+        // Line 1: heading + wheel odometry.
         Debug::Log("[Test] H=" + Debug::doubleToString(Odom.heading(), 1) +
                        " W=(" + Debug::doubleToString(Odom.wheelX(), 1) + "," +
-                       Debug::doubleToString(Odom.wheelY(), 1) + ")" +
-                       " I=(" + Debug::doubleToString(Odom.imuX(), 1) + "," +
-                       Debug::doubleToString(Odom.imuY(), 1) + ")",
+                       Debug::doubleToString(Odom.wheelY(), 1) + ")",
                    Debug::LogLevel::Info);
 
         // Line 2: raw IMU acceleration (g).

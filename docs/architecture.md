@@ -9,7 +9,7 @@ MEKFC5 是一套模块化的 VEX V5 程序。按职责分层，硬件封装与�
 | 层 | 模块 | 职责 |
 |---|---|---|
 | 硬件封装 | `XDrive` | 全向底盘运动学（混合、限幅、idle-brake、自动位移/旋转） |
-| | `Odometry` | 航向、轮式里程计、IMU 航位推算、安装标定 |
+| | `Odometry` | 航向 + 轮式里程计（IMU 航位推算已禁用） |
 | | `Lift` / `Clamp` | 升降机 / 夹爪手动与自动动作 |
 | | `PIDController` | 通用 PID |
 | 服务 | `HiDebug`（`Debug::Log`、`str.h`） | 分级日志、多目标输出 |
@@ -30,8 +30,8 @@ MEKFC5 是一套模块化的 VEX V5 程序。按职责分层，硬件封装与�
 | 线程 | 启动点 | 作用 |
 |---|---|---|
 | main | `main()` | 初始化、注册竞赛回调、常驻循环 |
-| 里程计线程 | `initialize()` 中 `static vex::thread odometryThread` | 每 ~10ms 更新 IMU 积分与轮式里程计 |
-| 单元测试线程 | `HiTest()` | 每 500ms 打印朝向/里程计/IMU/原始加速度 |
+| 里程计线程 | `initialize()` 中 `static vex::thread odometryThread` | 每 ~10ms 更新轮式里程计（IMU 积分已禁用） |
+| 单元测试线程 | `HiTest()` | 每 500ms 打印朝向/轮式里程计/原始加速度 |
 | 按钮/传感器回调线程 | `pressed()` 回调 | 切换驾驶模式/轴锁定、请求朝向复位等 |
 
 - 跨线程共享状态用 `vex::mutex` 保护（如 `driver-control` 的 `drive_mode_mutex`）；对实时性要求高的标志使用 `volatile`（如 `XDrive::braking_`）。
@@ -50,7 +50,7 @@ MEKFC5 是一套模块化的 VEX V5 程序。按职责分层，硬件封装与�
 ```
 Controller → driver-control.updateChassis → (NorthUp 旋转变换)? → (轴锁定)? → XDrive.drive → 4 电机
 Controller → updateLift / updateClamp → Lift / Clamp 手动接口
-Inertial → Odometry.updateImu/updateWheel → Odom（屏幕/自动流程读取）
+Inertial → Odometry（航向）+ Odometry.updateWheel → Odom（屏幕/自动流程读取）
 ```
 
 ## 数据流（自动）
