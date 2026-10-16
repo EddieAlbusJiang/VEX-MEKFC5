@@ -35,6 +35,7 @@ MEKFC5 是一套模块化的 VEX V5 程序。按职责分层，硬件封装与�
 | 按钮/传感器回调线程 | `pressed()` 回调 | 切换驾驶模式/轴锁定、请求朝向复位等 |
 
 - 跨线程共享状态用 `vex::mutex` 保护（如 `driver-control` 的 `drive_mode_mutex`）；对实时性要求高的标志使用 `volatile`（如 `XDrive::braking_`）。
+- **自动/手动阶段互斥**：`Auto_Active`（`instance.*` 的 `volatile bool`）在 `autonomous()` 期间置位；`driverControl()` 见其为真时不再命令硬件，避免两者同时抢占底盘/机构造成抖顿。
 - 涉及传感器写入的按钮回调**只置位请求**，实际调用（如 `resetRotation`）在控制循环中执行。
 
 ## 坐标系与单位

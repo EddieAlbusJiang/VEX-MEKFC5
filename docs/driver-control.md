@@ -23,6 +23,7 @@ sleep 10ms
 | `ButtonX` | 切换驾驶模式（HeadingUp ⇄ NorthUp），切换时自动复位朝向 |
 | `ButtonY` | 复位朝向（当前朝向→0） |
 | `ButtonA` | 轴锁定 开/关 |
+| `ButtonB` | 调试：跑一遍 `autonomous()`（运行中忽略） |
 | `ButtonUp` / `ButtonDown` | 升降 上升 / 下降 |
 | `ButtonR2` / `ButtonR1` | 夹爪 合紧 / 张开 |
 
@@ -64,5 +65,6 @@ sleep 10ms
 
 ## 备注
 
+- **自动阶段互斥**：当 `Auto_Active`（自动阶段进行中）为真时，主循环**跳过** `serviceHeadingReset/updateChassis/updateLift/updateClamp`，仅刷新屏幕，避免与 `autonomous()` 抢占硬件。
 - 驾驶模式与轴锁定是**两个独立设定**，仅共用同一把互斥锁。
 - `updateLift/updateClamp` 在无按键时调用各机构 `stop()`（升降 hold；夹爪 hold/锁定）。

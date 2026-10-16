@@ -1,5 +1,7 @@
 #include "calc.h"
 
+#include <cmath>
+
 int sgn(double val) { return (0 < val) - (val < 0); }
 
 double deadZone(double input, double limit) {
@@ -38,4 +40,19 @@ double degNorm180(double input) {
         input += 360.0;
     }
     return input;
+}
+
+double approachSpeed(double max_speed, double error, double decel_tol, double min_output) {
+    const double mag = std::fabs(error);
+    double cmd = max_speed;
+    if (decel_tol > 0.0 && mag < decel_tol) {
+        cmd = max_speed * (mag / decel_tol);
+    }
+    if (cmd < min_output) {
+        cmd = min_output;
+    }
+    if (cmd > max_speed) {
+        cmd = max_speed;
+    }
+    return cmd;
 }

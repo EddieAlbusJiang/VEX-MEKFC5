@@ -46,16 +46,20 @@ void AutoClampOpen(double speed = P_CLAMP_SPEED);   // → open_angle_
 void AutoClampClose(double speed = P_CLAMP_SPEED);  // → close_angle_
 ```
 
-内部 `runToAngle(target, speed)`（**恒速**，不复用锁定 PID）：
+内部 `runToAngle(target, speed)`（恒速 + 临近减速，不复用锁定 PID）：
 
 1. 目标钳制到 `[close, open]`。
 2. 暂存并 `setSpeed(speed)`。
-3. 每 ~10ms：`|target - position()| <= tolerance_` → 停止并累计稳定（`P_MECH_SETTLE_MS`）后退出；顶限位 → 停；否则按误差符号恒速 `spin(fwd/rev, speed_)`。
+3. 每 ~10ms：
+   - `|err| <= tolerance_` → `hold` 并累计稳定（`P_MECH_SETTLE_MS`）后退出；
+   - 处于“保持”且在 `tolerance_ + P_MECH_HYSTERESIS` 内 → 继续 `hold`（防边界抖动）；
+   - 顶限位 → 停；
+   - 否则按误差符号驱动，速度经 `approachSpeed()` **临近减速**（`P_MECH_DECEL_TOL`）且不低于 `P_MECH_MIN_OUTPUT`。
 4. 结束 `hold`；把 `locked_position_ = position()`（保持后续手动 `stop()` 一致）；恢复原速度。
 
 ## 相关宏（`config.h`）
 
-`P_CLAMP_OPEN_ANGLE`、`P_CLAMP_CLOSE_ANGLE`、`P_CLAMP_SPEED`、`P_CLAMP_TOLERANCE`、`P_CLAMP_PID_KP/KD/KI`、`P_MECH_TIMEOUT_MS`、`P_MECH_SETTLE_MS`。
+`P_CLAMP_OPEN_ANGLE`、`P_CLAMP_CLOSE_ANGLE`、`P_CLAMP_SPEED`、`P_CLAMP_TOLERANCE`、`P_CLAMP_PID_KP/KD/KI`、`P_MECH_TIMEOUT_MS`、`P_MECH_SETTLE_MS`、`P_MECH_DECEL_TOL`、`P_MECH_MIN_OUTPUT`、`P_MECH_HYSTERESIS`。
 
 ## 备注
 

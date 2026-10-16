@@ -1,4 +1,5 @@
 #include "driver-control.h"
+#include "autonomous.h"
 #include "HiDebug.h"
 
 #include <cmath>
@@ -22,6 +23,8 @@ vex::mutex drive_mode_mutex;                 // shared with the button callbacks
 bool heading_reset_requested = false;
 // Axis-aligned translation (Button A): keep only the dominant translation axis.
 bool axis_lock_enabled = false;
+// Debug: Button B requests a single run of the autonomous routine.
+bool run_autonomous_requested = false;
 
 DriveMode getDriveMode() {
     drive_mode_mutex.lock();
@@ -67,6 +70,23 @@ void serviceHeadingReset() {
         Odom.resetRotation();
     }
 }
+
+void onRunAutonomous() {
+    if (Auto_Active) {
+        return; // ignore while an autonomous run is already in progress
+    }
+    drive_mode_mutex.lock();
+    run_autonomous_requested = true;
+    drive_mode_mutex.unlock();
+}
+
+bool consumeRunAutonomous() {
+    drive_mode_mutex.lock();
+    const bool requested = run_autonomous_requested;
+    run_autonomous_requested = false;
+    drive_mode_mutex.unlock();
+    return requested;
+}
 } // namespace
 
 void driverControl() {
@@ -79,20 +99,27 @@ void driverControl() {
         Controller.ButtonX.pressed(onModeToggle);
         Controller.ButtonY.pressed(onHeadingReset);
         Controller.ButtonA.pressed(onAxisLockToggle);
+        Controller.ButtonB.pressed(onRunAutonomous);
         callbacks_registered = true;
     }
 
     // Keep running while the driver control period is active.
     while (true) {
-        serviceHeadingReset();
-        updateChassis();
-        updateLift();
-        updateClamp();
+        // Debug: run the autonomous routine once when requested (Button B).
+        if (consumeRunAutonomous() && !Auto_Active) {
+            autonomous();
+        }
+
+        // While the autonomous routine runs, do not command the hardware (it
+        // would fight the autonomous routine); keep the screen updated only.
+        if (!Auto_Active) {
+            serviceHeadingReset();
+            updateChassis();
+            updateLift();
+            updateClamp();
+        }
         updateControllerScreen();
 
-        // Real-time mechanism telemetry (angles in motor degrees).
-        printf("[Mech] Lift %.1f Clamp %.1f\n", Mech_Lift.position(), Mech_Clamp.position());
-        printf("[Inertial] Heading %.1f Rotation %.1f\n", Odom.heading(), Odom.rotation());
         vex::this_thread::sleep_for(10);
     }
 }
@@ -131,10 +158,8 @@ void updateChassis() {
 
 void updateLift() {
     if (Controller.ButtonUp.pressing()) {
-        printf("Controller L1\n");
         Mech_Lift.up();
     } else if (Controller.ButtonDown.pressing()) {
-        printf("Controller L2\n");
         Mech_Lift.down();
     } else {
         Mech_Lift.stop();
@@ -143,10 +168,8 @@ void updateLift() {
 
 void updateClamp() {
     if (Controller.ButtonR2.pressing()) {
-        printf("Controller R2\n");
         Mech_Clamp.close();
     } else if (Controller.ButtonR1.pressing()) {
-        printf("Controller R1\n");
         Mech_Clamp.open();
     } else {
         Mech_Clamp.stop();

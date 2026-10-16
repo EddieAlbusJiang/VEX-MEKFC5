@@ -15,6 +15,7 @@ class PIDController {
   public:
     explicit PIDController(PIDParam params);
     void   setGains(PIDParam params);
+    void   setUseSeconds(bool use); // false(默认)=毫秒计时；true=秒计时
     void   reset();            // 清积分/微分/输出并重设时间基准
     void   update(double error);
     double output() const;
@@ -24,9 +25,9 @@ class PIDController {
 ## 行为
 
 - 每个控制周期调用一次 `update(error)`，随后读取 `output()`。
-- `dt` 由内部 `vex::timer` 测量（**毫秒**）。因此：
+- `dt` 由内部 `vex::timer` 测量，默认**毫秒**；调用 `setUseSeconds(true)` 后 `dt` 以**秒**计（使 `kD` 量级更常规、可用作阻尼）。
   - `D = kD * (e - e_prev) / dt`
-  - `I = kI * ∫ e dt`（按 ms 累加）
+  - `I = kI * ∫ e dt`（按 dt 单位累加）
 - `update`：`output = P + D + I`。
 - `reset()`：清零 `prev_error_`、`error_integral_`、`output_`，并把 `prev_time_` 设为当前时刻（`dt<=0` 时 D 项取 0，避免除零）。
 
@@ -38,5 +39,5 @@ class PIDController {
 
 ## 使用位置
 
-- `Clamp`：位置锁定环（`stop()` 内归位，增益 `P_CLAMP_PID_*`）。
-- `XDrive` 自动流程：位移的纵向/横向环与朝向环（`static` 复用，`P_AUTO_*_PID_*`）。
+- `Clamp`：位置锁定环（`stop()` 内归位，增益 `P_CLAMP_PID_*`；**按秒计时**）。
+- `XDrive` 自动流程：位移的纵向/横向环与朝向环（`static` 复用，按秒计时，`P_AUTO_*_PID_*`）。

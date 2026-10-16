@@ -19,7 +19,7 @@
 | `P_CLAMP_CLOSE_ANGLE` | -10.0 | 合紧限位（小角，deg） |
 | `P_CLAMP_SPEED` | 20.0 | 恒速（percent） |
 | `P_CLAMP_TOLERANCE` | 1.0 | 位置锁定死区 / 自动到位容差（deg） |
-| `P_CLAMP_PID_KP/KD/KI` | 0.9 / 0.05 / 0.0 | 位置锁定 PID 增益 |
+| `P_CLAMP_PID_KP/KD/KI` | 0.5 / 0.03 / 0.0 | 位置锁定 PID 增益（按秒计时） |
 
 ## Odometry
 
@@ -35,7 +35,7 @@
 
 | 宏 | 默认 | 含义 |
 |---|---|---|
-| `P_XDRIVE_MAX_OUTPUT` | 0.5 | 全局输出上限（0..1，乘在归一化之后） |
+| `P_XDRIVE_MAX_OUTPUT` | 0.7 | 全局输出上限（0..1，乘在归一化之后） |
 | `P_XDRIVE_MIN_OUTPUT` | 1.0 | idle-brake 进入阈值（percent） |
 | `P_XDRIVE_HYSTERESIS` | 1.0 | idle-brake 退出滞回（percent） |
 
@@ -48,8 +48,8 @@
 | `P_AUTO_ANGLE_TOL` | 2.0 | 旋转到位容差（deg） |
 | `P_AUTO_TIMEOUT_MS` | 5000 | 超时（ms） |
 | `P_AUTO_SETTLE_MS` | 100 | 容差内需稳定时长（ms） |
-| `P_AUTO_MOVE_PID_KP/KD/KI` | 2.0 / 0.1 / 0.0 | 纵向/横向 PID |
-| `P_AUTO_ROT_PID_KP/KD/KI` | 1.5 / 0.2 / 0.0 | 朝向 PID |
+| `P_AUTO_MOVE_PID_KP/KD/KI` | 1.0 / 0.02 / 0.0 | 纵向/横向 PID（按秒计时） |
+| `P_AUTO_ROT_PID_KP/KD/KI` | 0.8 / 0.05 / 0.0 | 朝向 PID（按秒计时） |
 
 ## Auto 机构（Clamp/Lift 自动动作）
 
@@ -58,6 +58,9 @@
 | `P_LIFT_TOL` | 2.0 | 升降到位容差（deg） |
 | `P_MECH_TIMEOUT_MS` | 4000 | 机构自动超时（ms） |
 | `P_MECH_SETTLE_MS` | 100 | 机构到稳定时长（ms） |
+| `P_MECH_DECEL_TOL` | 15.0 | 临近目标开始减速的距离（deg） |
+| `P_MECH_MIN_OUTPUT` | 8.0 | 机构最小有效输出（percent，防低速堵转） |
+| `P_MECH_HYSTERESIS` | 2.0 | 到位后重新起动的附加余量（deg） |
 
 ## 其他常量
 

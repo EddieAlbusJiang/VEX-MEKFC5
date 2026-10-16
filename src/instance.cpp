@@ -6,6 +6,8 @@ vex::competition Competition;
 vex::brain Brain;
 vex::controller Controller;
 
+volatile bool Auto_Active = false;
+
 vex::motor Motor_Drive_L1(vex::PORT2, vex::gearSetting::ratio18_1, false);
 vex::motor Motor_Drive_L2(vex::PORT3, vex::gearSetting::ratio18_1, false);
 vex::motor Motor_Drive_R1(vex::PORT4, vex::gearSetting::ratio18_1, true);

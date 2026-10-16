@@ -8,6 +8,7 @@
 
 ```cpp
 void autonomous() {
+    Auto_Active = true;            // 阶段互斥：让 driverControl 暂停命令硬件
     Chassis.setIdleBrake(false);   // 自动期间关闭逐轮 idle-brake
 
     // 示例（当前未执行）：
@@ -20,9 +21,12 @@ void autonomous() {
     printf(" [AUTON] Time: %dms\n", timer.time());
 
     Chassis.setIdleBrake(true);    // 恢复
+    Auto_Active = false;
 }
 ```
 
+- **阶段互斥**：`Auto_Active`（`instance.*` 中的 `volatile bool`）在自动阶段置位，`driverControl()` 见其为真时**不再命令底盘/机构**（仅刷新屏幕），避免与 `autonomous()` 互相打断。
+- **调试触发**：在手动阶段按 `ButtonB` 可**同步跑一遍** `autonomous()`（运行中再次按被忽略）；起止由 `autonomous()` 首尾的 `Debug::Log("[Auto] start/done")` 提示。
 - **idle-brake 在自动阶段首尾统一关闭/恢复**（避免逐轮锁死扭曲 holonomic 运动），不在自动函数内部单独开关。
 
 ## 可用接口

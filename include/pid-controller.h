@@ -20,11 +20,15 @@ class PIDController {
     double prev_error_ = 0.0;
     double error_integral_ = 0.0;
     double output_ = 0.0;
+    // If true, dt is measured in seconds (D/I use per-second units); default ms.
+    bool use_seconds_ = false;
 
   public:
     explicit PIDController(PIDParam params);
 
     void setGains(PIDParam params);
+    // Select the time unit for D/I: false = milliseconds (default), true = seconds.
+    void setUseSeconds(bool use);
     // Clears integral/derivative/output state and re-baselines the timer. Call
     // before starting a new control run (or when leaving the active region).
     void reset();

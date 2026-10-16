@@ -1,4 +1,5 @@
 #include "lift.h"
+#include "calc.h"
 
 #include <algorithm>
 #include <cmath>
@@ -53,22 +54,30 @@ void Lift::runToAngle(double target_deg, double speed) {
 
     vex::timer timer;
     vex::timer settle;
+    bool holding = false;
     while (timer.time() < P_MECH_TIMEOUT_MS) {
         const double pos = position();
         const double err = target_deg - pos;
+        const double mag = std::fabs(err);
 
-        if (std::fabs(err) <= P_LIFT_TOL) {
+        if (mag <= P_LIFT_TOL) {
+            holding = true;
             motors_.stop(vex::brakeType::hold);
             if (settle.time() >= P_MECH_SETTLE_MS) {
                 break;
             }
+        } else if (holding && mag <= P_LIFT_TOL + P_MECH_HYSTERESIS) {
+            // Within the hysteresis band while holding: stay put (no chatter).
+            motors_.stop(vex::brakeType::hold);
         } else if ((err > 0.0 && pos >= max_angle_) || (err < 0.0 && pos <= min_angle_)) {
             motors_.stop(vex::brakeType::hold); // blocked by a limit before reaching target
             break;
         } else {
+            holding = false;
             settle.reset();
+            const double cmd = approachSpeed(speed_, err, P_MECH_DECEL_TOL, P_MECH_MIN_OUTPUT);
             const double sign = (err > 0.0) ? 1.0 : -1.0;
-            motors_.spin(vex::directionType::fwd, sign * speed_, vex::velocityUnits::pct);
+            motors_.spin(vex::directionType::fwd, sign * cmd, vex::velocityUnits::pct);
         }
         vex::this_thread::sleep_for(10);
     }

@@ -26,6 +26,17 @@ double clampSym(double value, double limit) {
 PIDController pid_move_forward(PIDParam{P_AUTO_MOVE_PID_KP, P_AUTO_MOVE_PID_KD, P_AUTO_MOVE_PID_KI});
 PIDController pid_move_lateral(PIDParam{P_AUTO_MOVE_PID_KP, P_AUTO_MOVE_PID_KD, P_AUTO_MOVE_PID_KI});
 PIDController pid_rot(PIDParam{P_AUTO_ROT_PID_KP, P_AUTO_ROT_PID_KD, P_AUTO_ROT_PID_KI});
+
+// Switch the auto PIDs to seconds-based time (so kD is meaningful). Runs once.
+void ensureAutoPidUnits() {
+    static bool done = false;
+    if (!done) {
+        pid_move_forward.setUseSeconds(true);
+        pid_move_lateral.setUseSeconds(true);
+        pid_rot.setUseSeconds(true);
+        done = true;
+    }
+}
 } // namespace
 
 // std::string doubleToString(double value, unsigned int precision) {
@@ -120,8 +131,6 @@ void XDrive::drive(double forward, double lateral, double rotational) {
                std::fabs(l2_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps &&
                std::fabs(r1_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps &&
                std::fabs(r2_.velocity(vex::velocityUnits::pct)) < kBrakeVelEps;
-    // Debug::Log("[x-drive]: scale = " + doubleToString(scale, 2), Debug::LogLevel::Info);
-    printf("%.2f %.2f %.2f %.2f %.2f \n", scale, output_l1, output_l2, output_r1, output_r2);
 }
 
 void XDrive::stop(vex::brakeType type) {
@@ -152,6 +161,7 @@ bool XDrive::isBraking() const { return braking_; }
 void XDrive::runMove(double target_x, double target_y, double speed) {
     const double entry_heading = odom_.heading();
 
+    ensureAutoPidUnits();
     pid_move_forward.reset();
     pid_move_lateral.reset();
     pid_rot.reset();
@@ -159,6 +169,7 @@ void XDrive::runMove(double target_x, double target_y, double speed) {
     const double limit = std::fabs(speed);
     vex::timer timer;
     vex::timer settle;
+    static int dbg = 0;
     while (timer.time() < P_AUTO_TIMEOUT_MS) {
         const double ex = target_x - odom_.wheelX();
         const double ey = target_y - odom_.wheelY();
@@ -178,6 +189,12 @@ void XDrive::runMove(double target_x, double target_y, double speed) {
         const double lat = clampSym(pid_move_lateral.output(), limit);
         const double rot = clampSym(pid_rot.output(), limit);
 
+        // TEMP diagnostic (console), throttled.
+        if (++dbg % 5 == 0) {
+            printf("[AUTO] ex=%.1f ey=%.1f bf=%.1f bl=%.1f fwd=%.1f lat=%.1f rot=%.1f h=%.1f\n",
+                   ex, ey, bf, bl, fwd, lat, rot, odom_.heading());
+        }
+
         drive(fwd, lat, rot);
 
         if (std::fabs(ex) < P_AUTO_POS_TOL && std::fabs(ey) < P_AUTO_POS_TOL) {
@@ -194,15 +211,23 @@ void XDrive::runMove(double target_x, double target_y, double speed) {
 }
 
 void XDrive::runRotate(double target_deg, double speed) {
+    ensureAutoPidUnits();
     pid_rot.reset();
 
     const double limit = std::fabs(speed);
     vex::timer timer;
     vex::timer settle;
+    static int dbg = 0;
     while (timer.time() < P_AUTO_TIMEOUT_MS) {
         const double herr = degNorm180(target_deg - odom_.heading());
         pid_rot.update(herr);
         const double rot = clampSym(pid_rot.output(), limit);
+
+        // TEMP diagnostic (console), throttled.
+        if (++dbg % 5 == 0) {
+            printf("[AUTO] tdeg=%.1f h=%.1f herr=%.1f rot=%.1f\n", target_deg, odom_.heading(), herr, rot);
+        }
+
         drive(0.0, 0.0, rot);
 
         if (std::fabs(herr) < P_AUTO_ANGLE_TOL) {

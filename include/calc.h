@@ -19,3 +19,7 @@ double degNorm180(double input);
 
 // normalizes an angle in degrees to the range [0, 360)
 double degNorm360(double input);
+
+// Returns a drive magnitude (0..max_speed) that decelerates linearly within
+// decel_tol of the target and never falls below min_output while moving.
+double approachSpeed(double max_speed, double error, double decel_tol, double min_output);

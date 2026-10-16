@@ -18,6 +18,10 @@ extern vex::motor Motor_Drive_R2;
 extern vex::inertial Inertial;
 extern Odometry Odom;
 
+// True while the autonomous routine is running; driverControl() suspends its
+// hardware commands meanwhile to avoid fighting the autonomous routine.
+extern volatile bool Auto_Active;
+
 extern XDrive Chassis;
 
 extern vex::motor Motor_Lift_1;

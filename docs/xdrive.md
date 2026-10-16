@@ -27,7 +27,7 @@ R2 = f + l - r
 ## 输出缩放
 
 - 若四轮中峰值超过 100，则**等比缩小**（保持方向），再乘全局上限 `max_output_ = P_XDRIVE_MAX_OUTPUT`（默认 0.5）。
-- 即实际峰值 ≈ 50%（可调）。
+- 即实际峰值 ≈ 70%（可调）。
 
 ## idle-brake（怠速锁死）
 
@@ -72,7 +72,7 @@ void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
 - 相对版：`AutoMoveFor→runMove(wheelX+dx, wheelY+dy)`；`AutoRotateFor→runRotate(heading+ddeg)`。
 - 位置来源：**轮式里程计**（`wheelX/wheelY`）。
 - `speed` 为 PID 输出上限（percent），默认 `P_AUTO_SPEED`；`drive()` 内还会乘 `max_output_`。
-- `pid_move_forward/pid_move_lateral/pid_rot` 为 `x-drive.cpp` 匿名命名空间的**文件级静态对象**，跨多步复用，每次进入 `reset()`。
+- `pid_move_forward/pid_move_lateral/pid_rot` 为 `x-drive.cpp` 匿名命名空间的**文件级静态对象**，跨多步复用，每次进入 `reset()`；并 `setUseSeconds(true)`（按秒计时，使 `kD` 可作为阻尼）。
 
 ## 相关宏（`config.h`）
 

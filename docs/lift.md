@@ -37,12 +37,16 @@ void AutoLiftDown(double speed = P_LIFT_SPEED);  // → min_angle_
 
 1. 目标钳制到 `[min, max]`。
 2. 暂存并 `setSpeed(speed)`。
-3. 每 ~10ms：若 `|target - position()| <= P_LIFT_TOL` → 停止并累计稳定时间，`>= P_MECH_SETTLE_MS` 退出；若顶到限位 → 停；否则按误差符号恒速 `spin(fwd, ±speed_)`。
+3. 每 ~10ms：
+   - `|err| <= P_LIFT_TOL` → `hold` 并累计稳定（`P_MECH_SETTLE_MS`）后退出；
+   - 保持中且在 `P_LIFT_TOL + P_MECH_HYSTERESIS` 内 → 继续 `hold`（防边界抖动）；
+   - 顶限位 → 停；
+   - 否则按误差符号驱动，速度经 `approachSpeed()` **临近减速**（`P_MECH_DECEL_TOL`）且不低于 `P_MECH_MIN_OUTPUT`。
 4. 结束 `stop()`（hold），恢复原速度。
 
 ## 相关宏（`config.h`）
 
-`P_LIFT_MIN_ANGLE`、`P_LIFT_MAX_ANGLE`、`P_LIFT_SPEED`、`P_LIFT_TOL`、`P_MECH_TIMEOUT_MS`、`P_MECH_SETTLE_MS`。
+`P_LIFT_MIN_ANGLE`、`P_LIFT_MAX_ANGLE`、`P_LIFT_SPEED`、`P_LIFT_TOL`、`P_MECH_TIMEOUT_MS`、`P_MECH_SETTLE_MS`、`P_MECH_DECEL_TOL`、`P_MECH_MIN_OUTPUT`、`P_MECH_HYSTERESIS`。
 
 ## 备注
 
