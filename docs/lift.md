@@ -52,3 +52,4 @@ void AutoLiftDown(double speed = P_LIFT_SPEED);  // → min_angle_
 
 - 开机前需手动把负载放到底部，`initialize()` 中 `resetPosition()` 建立零点。
 - `AutoLiftFor`：`target = position() + delta`。
+- **调试模式（`ButtonLeft`）**：`Debug_LimitsOff` 为真时，**手动** `moveBy`（`up/down`）忽略软限位；退出该模式时 `resetPosition()`。自动 `runToAngle` 不受影响。

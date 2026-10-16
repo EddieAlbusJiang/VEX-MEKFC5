@@ -185,9 +185,25 @@ void XDrive::runMove(double target_x, double target_y, double speed) {
         pid_move_lateral.update(bl);
         pid_rot.update(degNorm180(entry_heading - odom_.heading()));
 
-        const double fwd = clampSym(pid_move_forward.output(), limit);
-        const double lat = clampSym(pid_move_lateral.output(), limit);
+        double fwd = clampSym(pid_move_forward.output(), limit);
+        double lat = clampSym(pid_move_lateral.output(), limit);
         const double rot = clampSym(pid_rot.output(), limit);
+
+        // At the target: hold translation (no crawl during settle); heading
+        // correction still applies. Otherwise enforce a minimum translation
+        // magnitude so the final approach does not slow to a crawl.
+        const bool at_target = (std::fabs(ex) < P_AUTO_POS_TOL && std::fabs(ey) < P_AUTO_POS_TOL);
+        if (at_target) {
+            fwd = 0.0;
+            lat = 0.0;
+        } else {
+            const double m = std::sqrt(fwd * fwd + lat * lat);
+            if (m > 1e-6 && m < P_AUTO_MIN_OUTPUT) {
+                const double k = P_AUTO_MIN_OUTPUT / m;
+                fwd = clampSym(fwd * k, limit);
+                lat = clampSym(lat * k, limit);
+            }
+        }
 
         // TEMP diagnostic (console), throttled.
         if (++dbg % 5 == 0) {

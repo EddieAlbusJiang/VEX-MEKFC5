@@ -4,12 +4,12 @@
 // Included by vex.h so every translation unit sees the same single source.
 
 // ===== Lift =====
-#define P_LIFT_MIN_ANGLE 0.0
+#define P_LIFT_MIN_ANGLE 0
 #define P_LIFT_MAX_ANGLE 2350.0
 #define P_LIFT_SPEED 33.0
 
 // ===== Clamp =====
-#define P_CLAMP_OPEN_ANGLE 40.0
+#define P_CLAMP_OPEN_ANGLE 42.0
 #define P_CLAMP_CLOSE_ANGLE (-50.0)
 #define P_CLAMP_SPEED 20.0
 #define P_CLAMP_TOLERANCE 1.0
@@ -29,12 +29,13 @@
 
 // ===== Auto (autonomous move/rotate) =====
 #define P_AUTO_SPEED 100.0        // percent 0..100 (PID output cap)
-#define P_AUTO_POS_TOL 2.0       // cm
-#define P_AUTO_ANGLE_TOL 2.0     // deg
+#define P_AUTO_POS_TOL 1.0       // cm
+#define P_AUTO_ANGLE_TOL 1.5     // deg
 #define P_AUTO_TIMEOUT_MS 5000   // give up after this long
-#define P_AUTO_SETTLE_MS 100     // must stay within tolerance this long
-#define P_AUTO_MOVE_PID_KP 1.0
-#define P_AUTO_MOVE_PID_KD 0.02
+#define P_AUTO_SETTLE_MS 50      // must stay within tolerance this long
+#define P_AUTO_MIN_OUTPUT 12.0   // percent; minimum translation command (anti-crawl)
+#define P_AUTO_MOVE_PID_KP 2.5
+#define P_AUTO_MOVE_PID_KD 0.06
 #define P_AUTO_MOVE_PID_KI 0.0
 #define P_AUTO_ROT_PID_KP 0.8
 #define P_AUTO_ROT_PID_KD 0.05

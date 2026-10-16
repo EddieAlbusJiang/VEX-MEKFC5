@@ -24,6 +24,7 @@ sleep 10ms
 | `ButtonY` | 复位朝向（当前朝向→0） |
 | `ButtonA` | 轴锁定 开/关 |
 | `ButtonB` | 调试：跑一遍 `autonomous()`（运行中忽略） |
+| `ButtonLeft` | 调试模式开关：Clamp/Lift **手动运动不受软限位**；退出时两者位置清零 |
 | `ButtonUp` / `ButtonDown` | 升降 上升 / 下降 |
 | `ButtonR2` / `ButtonR1` | 夹爪 合紧 / 张开 |
 
@@ -60,13 +61,14 @@ sleep 10ms
 |---|---|---|
 | Row1 | `Lf%02d Lb%02d Rf%02d Rb%02d` | 四轮最终下发速度（|pct|，≤99） |
 | Row2 | `Lift%4d  Clamp%4d` | 升降/夹爪角度（deg） |
-| Row3 | `Man %4d,%4d %c%c%03d` | 轮式里程计 x,y（cm，钳制 4 字符）+ 轴锁定 `A`/空格 + 驾驶模式 `X`/`Y` + 秒（`%03d`） |
+| Row3 | `%s%4d,%4d %c%c%03d` | 前缀 `Man `（调试模式为 `ROOT`）+ 轮式里程计 x,y（cm，钳制 4 字符）+ 轴锁定 `A`/空格 + 驾驶模式 `X`/`Y` + 秒（`%03d`） |
 
 - 每个字段定宽，直接覆盖旧字符，无需清屏。
 - Row3 长度 19 列，符合 Controller 屏幕宽度。
 
 ## 备注
 
+- **调试模式（ButtonLeft）**：全局 `Debug_LimitsOff`；开启后 `Clamp`/`Lift` **手动**运动忽略软限位（自动 `runToAngle` 仍受限）；**退出时**对两者 `resetPosition()`（位置清零）。屏幕 Row3 前缀由 `Man ` 变为 `ROOT`。开关与退出重置在**主循环**服务（回调仅置位请求）。
 - **单例守卫**：`driverControl()` 通过互斥锁保证全程序只运行**一个**循环（`main()` 直调与 `Competition` 自动调用不会重复启动）。
 - **屏幕刷新节流**：`last_refresh_ms` 与 `control_timer` 在入口一起重置，避免计时器重置导致的长时间不刷新（冻屏）。
 - **自动阶段互斥**：当 `Auto_Active`（自动阶段进行中）为真时，主循环**跳过** `serviceHeadingReset/updateChassis/updateLift/updateClamp`，仅刷新屏幕，避免与 `autonomous()` 抢占硬件。

@@ -67,6 +67,8 @@ void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
 4. 三路输出限幅到 `speed` 后 `drive()`。
 5. 退出：`|ex|,|ey| < P_AUTO_POS_TOL` 持续 `P_AUTO_SETTLE_MS`，或 `P_AUTO_TIMEOUT_MS` 超时；结束 `stop(hold)`。
 
+加速末端：到位容差内**平移置零**（仅保留朝向修正，避免 settle 期间爬行）；否则若平移指令幅值低于 `P_AUTO_MIN_OUTPUT`，则**按幅值等比抬到下限**（保持方向），避免末端趋零而爬行。
+
 `runRotate(t_deg,speed)`：`pid_rot` 对 `degNorm180(t_deg-heading)` 输出，`drive(0,0,rot)`，`|err|<P_AUTO_ANGLE_TOL` 稳定或超时退出，结束 `stop(hold)`。
 
 - 相对版：`AutoMoveFor→runMove(wheelX+dx, wheelY+dy)`；`AutoRotateFor→runRotate(heading+ddeg)`。

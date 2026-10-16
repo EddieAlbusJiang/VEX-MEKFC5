@@ -1,5 +1,6 @@
 #include "lift.h"
 #include "calc.h"
+#include "instance.h"
 
 #include <algorithm>
 #include <cmath>
@@ -22,13 +23,13 @@ bool Lift::atTop() const { return position() >= max_angle_; }
 
 void Lift::moveBy(int direction) {
     if (direction > 0) {
-        if (position() >= max_angle_) {
+        if (!Debug_LimitsOff && position() >= max_angle_) {
             stop();
             return;
         }
         motors_.spin(vex::directionType::fwd, speed_, vex::velocityUnits::pct);
     } else {
-        if (position() <= min_angle_) {
+        if (!Debug_LimitsOff && position() <= min_angle_) {
             stop();
             return;
         }

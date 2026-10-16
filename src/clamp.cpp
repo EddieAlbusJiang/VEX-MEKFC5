@@ -1,5 +1,6 @@
 #include "clamp.h"
 #include "calc.h"
+#include "instance.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,7 +25,7 @@ void Clamp::moveBy(int direction) {
     const double delta_deg = direction * (speed_ / 100.0) * 3600 * (TICK_MS / 1000.0) * 1.5;
 
     if (direction < 0) {
-        if (position() + delta_deg <= close_angle_) {
+        if (!Debug_LimitsOff && position() + delta_deg <= close_angle_) {
             locked_position_ = close_angle_;
             stop();
             return;
@@ -32,7 +33,7 @@ void Clamp::moveBy(int direction) {
         locked_position_ = position() + delta_deg;
         motor_.spin(vex::directionType::rev, speed_, vex::velocityUnits::pct);
     } else {
-        if (position() + delta_deg >= open_angle_) {
+        if (!Debug_LimitsOff && position() + delta_deg >= open_angle_) {
             locked_position_ = open_angle_;
             stop();
             return;
@@ -50,9 +51,10 @@ void Clamp::stop() {
     const double error = locked_position_ - current;
 
     const bool within_tolerance = std::fabs(error) <= tolerance_;
-    // Do not drive further past a limit while trying to reach the target.
-    const bool at_open_limit = error > 0.0 && current >= open_angle_;
-    const bool at_close_limit = error < 0.0 && current <= close_angle_;
+    // Do not drive further past a limit while trying to reach the target
+    // (unless the debug limits-off mode is enabled).
+    const bool at_open_limit = !Debug_LimitsOff && error > 0.0 && current >= open_angle_;
+    const bool at_close_limit = !Debug_LimitsOff && error < 0.0 && current <= close_angle_;
 
     if (!within_tolerance && !at_open_limit && !at_close_limit) {
         if (!locking_) {

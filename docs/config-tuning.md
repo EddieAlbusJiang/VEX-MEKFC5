@@ -47,8 +47,9 @@
 | `P_AUTO_POS_TOL` | 2.0 | 位移到位容差（cm） |
 | `P_AUTO_ANGLE_TOL` | 2.0 | 旋转到位容差（deg） |
 | `P_AUTO_TIMEOUT_MS` | 5000 | 超时（ms） |
-| `P_AUTO_SETTLE_MS` | 100 | 容差内需稳定时长（ms） |
-| `P_AUTO_MOVE_PID_KP/KD/KI` | 1.0 / 0.02 / 0.0 | 纵向/横向 PID（按秒计时） |
+| `P_AUTO_SETTLE_MS` | 50 | 容差内需稳定时长（ms） |
+| `P_AUTO_MIN_OUTPUT` | 12.0 | 最小平移指令（percent，防末端爬行） |
+| `P_AUTO_MOVE_PID_KP/KD/KI` | 2.5 / 0.06 / 0.0 | 纵向/横向 PID（按秒计时） |
 | `P_AUTO_ROT_PID_KP/KD/KI` | 0.8 / 0.05 / 0.0 | 朝向 PID（按秒计时） |
 
 ## Auto 机构（Clamp/Lift 自动动作）
