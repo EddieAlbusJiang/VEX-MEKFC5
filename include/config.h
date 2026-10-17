@@ -10,18 +10,22 @@
 
 // ===== Clamp =====
 #define P_CLAMP_OPEN_ANGLE 90.0
-#define P_CLAMP_CLOSE_ANGLE (9.0)
+#define P_CLAMP_CLOSE_ANGLE (0.0)
 #define P_CLAMP_SPEED 20.0
 #define P_CLAMP_TOLERANCE 1.0
 #define P_CLAMP_PID_KP 0.5
 #define P_CLAMP_PID_KD 0.03
 #define P_CLAMP_PID_KI 0.0
+#define P_CLAMP_CALIB_SPEED 9.0           // percent; slow speed while calibrating close angle
+#define P_CLAMP_CALIB_MS 1200             // ms; how long to drive toward close while calibrating
+#define P_CLAMP_CLOSE_CALIB_OFFSET (-3.0) // deg; added to the measured close position
 
 // ===== Odometry =====
-#define P_ODOM_COEFFICIENT (3600.0 / 3600.0)
+// #define P_ODOM_COEFFICIENT (3600.0 / 3600.0)
+#define P_ODOM_COEFFICIENT 1
 #define P_ODOM_WHEEL_DIAMETER_CM 8.25
 #define P_ODOM_WHEEL_RATIO 1.0
-#define P_ODOM_DIFF_TOL 0.062
+#define P_ODOM_DIFF_TOL 0.065
 
 // ===== XDrive =====
 #define P_XDRIVE_MAX_OUTPUT 0.75

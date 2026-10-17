@@ -87,9 +87,9 @@ void autonomous() {
     Chassis.AutoRotateTo(-180);
     // Chassis.AutoMoveFor(0, 2.0);
     Chassis.AutoMoveTo(-10, -80.0);
-    Chassis.AutoFastMoveFor(0, 100);
-    Chassis.AutoFastMoveFor(0, -70);
-    Chassis.AutoMoveFor(-25, -25);
+    Chassis.AutoFastMoveFor(0, 105);
+    Chassis.AutoFastMoveFor(0, -72);
+    Chassis.AutoMoveFor(-30, -40);
     // Chassis.AutoFastMoveFor(0, -20);
     // Chassis.AutoFastMoveFor(0, 20);
     // Chassis.AutoFastMoveFor(0, -20);

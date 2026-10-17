@@ -12,6 +12,7 @@ class Clamp {
     vex::motor& motor_;
     double open_angle_;  // open limit (large motor angle)
     double close_angle_; // closed limit (small motor angle)
+    const double base_close_angle_; // predefined close angle, used to clamp calibration
     double speed_;       // constant rate (percent)
 
     // Position lock: while moving, locked_position_ continuously records the
@@ -69,6 +70,15 @@ class Clamp {
     // Assume the clamp is currently at its maximum (open) angle; used at boot so
     // the position reference matches the mechanically-open state.
     void assumeOpen();
+
+    // Set the closed limit only (clamped so it is never shallower than the
+    // predefined P_CLAMP_CLOSE_ANGLE). Does not command the motor.
+    void setCloseAngle(double angle);
+
+    // Boot calibration of the close angle: drive slowly toward close for
+    // P_CLAMP_CALIB_MS (ignoring the close limit), then set the close angle to
+    // (measured position + P_CLAMP_CLOSE_CALIB_OFFSET) and open back up here.
+    void calibrateCloseAngle();
 
     // ----- Autonomous helpers (blocking; move to an angle, then hold) -----
     void AutoClampTo(double target_deg, double speed = P_CLAMP_SPEED);

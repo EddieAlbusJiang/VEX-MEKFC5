@@ -1,5 +1,6 @@
 #include "clamp.h"
 #include "calc.h"
+#include "HiDebug.h"
 #include "instance.h"
 
 #include <algorithm>
@@ -10,6 +11,7 @@ constexpr int Clamp::kQueueSize;
 
 Clamp::Clamp(vex::motor& motor, double open_angle, double close_angle, double speed)
     : motor_(motor), open_angle_(open_angle), close_angle_(close_angle),
+      base_close_angle_(close_angle),
       pid_(PIDParam{P_CLAMP_PID_KP, P_CLAMP_PID_KD, P_CLAMP_PID_KI}) {
     // The clamp must hold at intermediate positions, so always hold.
     motor_.setStopping(vex::brakeType::hold);
@@ -101,6 +103,44 @@ void Clamp::assumeOpen() {
     locked_position_ = open_angle_;                            // keep the lock target in sync
     pid_.reset();
     locking_ = false;
+}
+
+void Clamp::setCloseAngle(double angle) {
+    // Never shallower than the predefined close angle (guards bad calibration).
+    close_angle_ = std::min(angle, base_close_angle_);
+    // Setter only: do not command the motor here.
+    locked_position_ = close_angle_;
+    pid_.reset();
+    locking_ = false;
+}
+
+void Clamp::calibrateCloseAngle() {
+    Debug::Log("[Clamp] close-angle calibration start", Debug::LogLevel::Info);
+
+    const double prev_speed = speed_;
+    setSpeed(P_CLAMP_CALIB_SPEED);
+    vex::timer timer;
+    while (timer.time() < P_CLAMP_CALIB_MS) {
+        // Drive toward close at a slow rate, ignoring the close limit.
+        motor_.spin(vex::directionType::rev, speed_, vex::velocityUnits::pct);
+        vex::this_thread::sleep_for(10);
+    }
+
+    const double measured = position();
+    setCloseAngle(measured + P_CLAMP_CLOSE_CALIB_OFFSET); // set the close limit only
+    motor_.stop(vex::brakeType::hold);
+    setSpeed(prev_speed);
+
+    // Open back to open_angle_ (calibration drives the clamp; setCloseAngle does not).
+    runToAngle(open_angle_, speed_);
+    locked_position_ = open_angle_;
+    pid_.reset();
+    locking_ = false;
+
+    Debug::Log("[Clamp] close-angle calibration done: measured=" + Debug::doubleToString(measured, 2) +
+                   " offset=" + Debug::doubleToString(P_CLAMP_CLOSE_CALIB_OFFSET, 1) +
+                   " close=" + Debug::doubleToString(close_angle_, 2),
+               Debug::LogLevel::Info);
 }
 
 void Clamp::setSpeed(double speed) { speed_ = std::max(0.0, std::min(speed, 100.0)); }

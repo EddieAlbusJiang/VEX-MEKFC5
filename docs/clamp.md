@@ -75,6 +75,12 @@ void AutoClampClose(void (*onDone)(void), double speed = P_CLAMP_SPEED);
    - 否则按误差符号驱动，速度经 `approachSpeed()` **临近减速**（`P_MECH_DECEL_TOL`）且不低于 `P_MECH_MIN_OUTPUT`。
 4. 结束 `hold`；把 `locked_position_ = position()`（保持后续手动 `stop()` 一致）；恢复原速度。
 
+## 关闭角校准
+
+- `setCloseAngle(double angle)`：**纯设置**关闭限位（**钳制为不大于预定义 `P_CLAMP_CLOSE_ANGLE`**，防校准错误），**不驱动夹爪**（仅同步锁定目标、清 PID）。
+- `calibrateCloseAngle()`（开机在 `initialize()` 调用）：以 `P_CLAMP_CALIB_SPEED`（9%）向关闭方向转 `P_CLAMP_CALIB_MS`(1200ms)，**期间绕过关闭软限位**；然后 `setCloseAngle(position() + P_CLAMP_CLOSE_CALIB_OFFSET)`（补偿 -3），随后**在此处**开启回 `open_angle_` 并同步锁定/清 PID。
+- 头尾各输出一条 Info 日志：`[Clamp] close-angle calibration start` / `... done: measured=.. offset=.. close=..`。
+
 ## 相关宏（`config.h`）
 
 `P_CLAMP_OPEN_ANGLE`、`P_CLAMP_CLOSE_ANGLE`、`P_CLAMP_SPEED`、`P_CLAMP_TOLERANCE`、`P_CLAMP_PID_KP/KD/KI`、`P_MECH_TIMEOUT_MS`、`P_MECH_SETTLE_MS`、`P_MECH_DECEL_TOL`、`P_MECH_MIN_OUTPUT`、`P_MECH_HYSTERESIS`。

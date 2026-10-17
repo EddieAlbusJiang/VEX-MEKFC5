@@ -20,7 +20,7 @@ void initialize() {
     HiIO::BrainScreen::setBrain(Brain);
     Controller.Screen.clearScreen();
     // Brain.Screen.setFillColor()
-    Debug::Log("[Main] MEKFC5 v0.32-beta Starting Up...", Debug::LogLevel::Info);
+    Debug::Log("[Main] MEKFC5 v0.33-beta Starting Up...", Debug::LogLevel::Info);
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Odom.calibrate()) {
         vex::this_thread::sleep_for(10);
@@ -38,14 +38,15 @@ void initialize() {
     // Upper mechanisms at boot: the load is manually placed at the bottom; the
     // clamp is manually opened, so treat it as being at its maximum angle.
     Mech_Lift.resetPosition();
-    Mech_Clamp.assumeOpen();
+    Mech_Clamp.assumeOpen();          // establish reference: open = open_angle
+    Mech_Clamp.calibrateCloseAngle(); // boot calibration of the close angle
     Debug::Log("[Main] Initialized.", Debug::LogLevel::Info);
     Controller.Screen.setCursor(1, 1);
     Controller.Screen.print("Hi Summoner!");
 }
 
 int main() {
-    printf("Hello MEKFC5 v0.32-beta\r\n");
+    printf("Hello MEKFC5 v0.33-beta\r\n");
     initialize();
 
     // Register the competition callbacks.

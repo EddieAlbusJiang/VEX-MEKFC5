@@ -20,6 +20,9 @@
 | `P_CLAMP_SPEED` | 20.0 | 恒速（percent） |
 | `P_CLAMP_TOLERANCE` | 1.0 | 位置锁定死区 / 自动到位容差（deg） |
 | `P_CLAMP_PID_KP/KD/KI` | 0.5 / 0.03 / 0.0 | 位置锁定 PID 增益（按秒计时） |
+| `P_CLAMP_CALIB_SPEED` | 9.0 | 关闭角校准时的慢速（percent） |
+| `P_CLAMP_CALIB_MS` | 1200 | 关闭角校准向关闭方向旋转时长（ms） |
+| `P_CLAMP_CLOSE_CALIB_OFFSET` | (-3.0) | 校准补偿：`close_angle = 测量角 + 该值`（deg） |
 
 ## Odometry
 
