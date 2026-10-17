@@ -36,5 +36,5 @@ enum class LogLevel : int {
 // Unified logging entry point.
 // Output format: [<Level>]<Content>\n  (e.g. "[W]High Velocity")
 // levelTag: Debug->D, Info->I, Warning->W, Critical->C, Fatal->F
-void Log(const std::string& content, LogLevel level);
+void Log(const std::string& content, LogLevel level); 
 } // namespace Debug

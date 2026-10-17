@@ -1,3 +1,4 @@
+#include <HiTest/conf.h>
 #include <HiTest.h>
 #include "HiDebug.h"
 #include "instance.h"
@@ -23,8 +24,11 @@ void displacementTest() {
     }
 }
 } // namespace
-
+#ifdef HT_TEST_ENABLED
 void HiTest() {
     // Run the test on its own thread so it does not block the caller.
     static vex::thread test_thread(displacementTest);
 }
+#else
+inline void HiTest(){return; }
+#endif

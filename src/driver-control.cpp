@@ -130,13 +130,13 @@ void serviceRootToggle() {
 
 void driverControl() {
     // Only one driverControl loop may run.
-    driver_guard_mutex.lock();
-    if (driver_running) {
-        driver_guard_mutex.unlock();
-        return;
-    }
-    driver_running = true;
-    driver_guard_mutex.unlock();
+    // driver_guard_mutex.lock();
+    // if (driver_running) {
+    //     driver_guard_mutex.unlock();
+    //     return;
+    // }
+    // driver_running = true;
+    // driver_guard_mutex.unlock();
 
     Debug::Log("[DriverControl] Manual Control Override.\n", Debug::LogLevel::Debug);
     control_timer.reset();

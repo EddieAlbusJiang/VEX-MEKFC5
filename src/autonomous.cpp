@@ -43,14 +43,14 @@ void autonomous() {
     Mech_Clamp.AutoClampOpen();
     Mech_Lift.AutoLiftTo(30, nullptr);
     Chassis.AutoMoveTo(0.0, -9.0);          // Clear Point
-    Chassis.AutoMoveTo(47.0, -9.0);         // Pin 1
-    Chassis.AutoMoveTo(47.0, -1.5);          // Approach
+    Chassis.AutoMoveTo(47.5, -9.0);         // Pin 1
+    Chassis.AutoMoveTo(47.5, -1.5);          // Approach
     Mech_Clamp.AutoClampClose();
     Mech_Lift.AutoLiftTo(1812, nullptr);
     Chassis.AutoRotateTo(-180, 45);
-    Chassis.AutoMoveTo(47.0, -17);
+    Chassis.AutoMoveTo(47.5, -17);
     Mech_Clamp.AutoClampOpen();
-    Chassis.AutoMoveTo(47.0, -14);
+    Chassis.AutoMoveTo(47.5, -14);
 
     // Second Stage
     // Chassis.AutoMoveTo(4, -28);             // Clear Point
@@ -85,9 +85,10 @@ void autonomous() {
     Chassis.AutoMoveTo(0, -14.0);
     Chassis.AutoRotateTo(-180);
     // Chassis.AutoMoveFor(0, 2.0);
-    Chassis.AutoMoveTo(0, -80.0);
+    Chassis.AutoMoveTo(-10, -80.0);
     Chassis.AutoFastMoveFor(0, 100);
-    Chassis.AutoFastMoveFor(0, -100);
+    Chassis.AutoFastMoveFor(0, -80);
+    Chassis.AutoMoveFor(-20, 0);
     // Chassis.AutoFastMoveFor(0, -20);
     // Chassis.AutoFastMoveFor(0, 20);
     // Chassis.AutoFastMoveFor(0, -20);

@@ -26,11 +26,8 @@ const char* levelTag(LogLevel level) {
 vex::mutex log_mutex;
 } // namespace
 
+#ifdef HD_LOG_ENABLED
 void Debug::Log(const std::string& content, LogLevel level) {
-#ifndef HD_LOG_ENABLED
-        return;
-#endif
-
     // Filter first: skip the string construction entirely when suppressed.
     if (level < HD_LOG_MIN_LEVEL) {
         return;
@@ -50,3 +47,6 @@ void Debug::Log(const std::string& content, LogLevel level) {
 #endif
     log_mutex.unlock();
 }
+#else
+inline void Debug::Log(const std::string& content, LogLevel level) { return; }
+#endif
