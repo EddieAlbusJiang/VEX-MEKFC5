@@ -9,8 +9,8 @@
 #define P_LIFT_SPEED 33.0
 
 // ===== Clamp =====
-#define P_CLAMP_OPEN_ANGLE 85.0
-#define P_CLAMP_CLOSE_ANGLE (-20.0)
+#define P_CLAMP_OPEN_ANGLE 90.0
+#define P_CLAMP_CLOSE_ANGLE (9.0)
 #define P_CLAMP_SPEED 20.0
 #define P_CLAMP_TOLERANCE 1.0
 #define P_CLAMP_PID_KP 0.5
@@ -18,9 +18,10 @@
 #define P_CLAMP_PID_KI 0.0
 
 // ===== Odometry =====
-#define P_ODOM_COEFFICIENT (3600.0 / 3544.0)
+#define P_ODOM_COEFFICIENT (3600.0 / 3600.0)
 #define P_ODOM_WHEEL_DIAMETER_CM 8.25
 #define P_ODOM_WHEEL_RATIO 1.0
+#define P_ODOM_DIFF_TOL 0.062
 
 // ===== XDrive =====
 #define P_XDRIVE_MAX_OUTPUT 0.75

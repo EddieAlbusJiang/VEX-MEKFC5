@@ -24,7 +24,7 @@ bool driver_running = false;
 //   NorthUp   (mode 2): joystick forward is locked to heading 0 (the "north").
 enum class DriveMode : int { HeadingUp = 1, NorthUp = 2 };
 
-DriveMode drive_mode = DriveMode::HeadingUp; // default mode 1
+DriveMode drive_mode = DriveMode::NorthUp; // default mode 2 (Y, north-up)
 vex::mutex drive_mode_mutex;                 // shared with the button callbacks
 bool heading_reset_requested = false;
 // Axis-aligned translation (Button A): keep only the dominant translation axis.
@@ -33,6 +33,8 @@ bool axis_lock_enabled = false;
 bool run_autonomous_requested = false;
 // Root mode: Button Left toggles "limits off" for Clamp/Lift manual motion.
 bool root_toggle_requested = false;
+// Button Right (Root only): reset the mechanism positions to zero.
+bool reset_position_requested = false;
 
 DriveMode getDriveMode() {
     drive_mode_mutex.lock();
@@ -49,9 +51,6 @@ bool getAxisLock() {
 }
 
 void onAxisLockToggle() {
-    if (!Root_Mode) {
-        return; // axis-lock is only available in Root mode
-    }
     drive_mode_mutex.lock();
     axis_lock_enabled = !axis_lock_enabled;
     drive_mode_mutex.unlock();
@@ -116,14 +115,32 @@ void serviceRootToggle() {
     const bool was_on = Root_Mode;
     Root_Mode = !was_on;
     if (was_on) {
-        // Exiting Root mode: zero the mechanism positions and force off the
-        // features that are only allowed while Root mode is active.
-        Mech_Lift.resetPosition();
-        Mech_Clamp.resetPosition();
+        // Exiting Root mode: clear the pending manual autonomous trigger.
+        // (Axis-lock is not Root-managed, and position reset is triggered by
+        // Button Right while in Root mode.)
         drive_mode_mutex.lock();
-        axis_lock_enabled = false;
         run_autonomous_requested = false;
         drive_mode_mutex.unlock();
+    }
+}
+
+void onResetPosition() {
+    if (!Root_Mode) {
+        return; // position reset is only available in Root mode
+    }
+    drive_mode_mutex.lock();
+    reset_position_requested = true;
+    drive_mode_mutex.unlock();
+}
+
+void serviceResetPosition() {
+    drive_mode_mutex.lock();
+    const bool requested = reset_position_requested;
+    reset_position_requested = false;
+    drive_mode_mutex.unlock();
+    if (requested) {
+        Mech_Lift.resetPosition();
+        Mech_Clamp.resetPosition();
     }
 }
 } // namespace
@@ -150,6 +167,7 @@ void driverControl() {
         Controller.ButtonA.pressed(onAxisLockToggle);
         Controller.ButtonB.pressed(onRunAutonomous);
         Controller.ButtonLeft.pressed(onRootToggle);
+        Controller.ButtonRight.pressed(onResetPosition);
         callbacks_registered = true;
     }
 
@@ -165,6 +183,7 @@ void driverControl() {
         if (!Auto_Active) {
             serviceHeadingReset();
             serviceRootToggle();
+            serviceResetPosition();
             updateChassis();
             updateLift();
             updateClamp();

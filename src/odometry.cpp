@@ -70,7 +70,7 @@ bool Odometry::calibrate() {
     const double rotation_diff = rotation_1000 - rotation_200;
     Debug::Log("[Odometry] calibration rotation_diff: " + Debug::doubleToString(rotation_diff, 3),
                Debug::LogLevel::Debug);
-    const bool stable = std::fabs(rotation_diff) < 0.05;
+    const bool stable = std::fabs(rotation_diff) < P_ODOM_DIFF_TOL;
     if (!stable) {
         Debug::Log("[Odometry] calibration failed (sensor drifting)", Debug::LogLevel::Warning);
     }
