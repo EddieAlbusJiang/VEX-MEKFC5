@@ -1,0 +1,78 @@
+# Driver Control（手动控制）
+
+`include/driver-control.h` / `src/driver-control.cpp`
+
+在 `main()` 中注册：`Competition.drivercontrol(driverControl)`；同时 `main()` 也直接调用了 `driverControl()` 以在无场控时手动调试。
+
+## 主循环
+
+```
+serviceHeadingReset()
+updateChassis()
+updateLift()
+updateClamp()
+updateControllerScreen()
+（printf 机构/惯导遥测）
+sleep 10ms
+```
+
+## 按钮映射
+
+| 按键 | 功能 |
+|---|---|
+| `ButtonX` | 切换驾驶模式（HeadingUp ⇄ NorthUp），切换时自动复位朝向 |
+| `ButtonY` | 复位朝向（当前朝向→0） |
+| `ButtonA` | 轴锁定 开/关 |
+| `ButtonB` | 调试：跑一遍 `autonomous()`（**仅 Root 模式可用**；运行中忽略） |
+| `ButtonLeft` | **Root 模式**开关：Clamp/Lift **手动运动不受软限位**（退出时**不**再归零） |
+| `ButtonRight` | **归零** Lift/Clamp 位置（**仅 Root 模式可用**） |
+| `ButtonUp` / `ButtonDown` | 升降 上升 / 下降 |
+| `ButtonR2` / `ButtonR1` | 夹爪 合紧 / 张开 |
+
+- 按键回调通过 `pressed()` 注册（一次）。回调线程与主循环共享状态用 `drive_mode_mutex` 保护。
+- 传感器复位（`Odom.resetRotation()`）不在回调线程直接执行，而是**置位请求**（`heading_reset_requested`），由主循环 `serviceHeadingReset()` 执行。
+
+## 驾驶模式
+
+- **HeadingUp（模式 1，车头朝上）**：摇杆 `forward/lateral` 直接按车体系下发。
+- **NorthUp（模式 2，北朝上，默认）**：把摇杆视为“开机系（北=heading 0）”的意图，按当前 `heading` 旋到车体系后再下发：
+  ```
+  bf = f·cosθ + l·sinθ
+  bl = -f·sinθ + l·cosθ
+  ```
+- `Axis1`（转向）不受模式影响。
+
+## 输入
+
+- `Axis3`：前后；`Axis4`：横移；`Axis1`：原地转向。
+- 处理顺序：**死区 `deadZone`（阈值 `kDeadZone`）→ 输入曲线 `driveCurve()` → （NorthUp）变换 → 轴锁定**。
+- 输入曲线：`f(x)=sign(x)·|x/100|^k·100`（`k = P_DRIVE_CURVE_EXP`，默认 1.5）；端点不变、单调、奇对称，小输入更细腻（下凸）。三轴均应用。
+
+## 轴锁定（Button A）
+
+- 启用后，在**完成 NorthUp 变换之后**，只保留绝对值较大的一路平移分量，另一路清零（平局保留前向）：
+  ```
+  if (|body_forward| >= |body_lateral|) body_lateral = 0; else body_forward = 0;
+  ```
+- 使小车以“横平竖直”的轨迹运动；`rotational` 不受影响。
+
+## 控制器屏幕（Throttled ~150ms）
+
+| 行 | 格式 | 内容 |
+|---|---|---|
+| Row1 | `Lf%02d Lb%02d Rf%02d Rb%02d` | 四轮最终下发速度（|pct|，≤99） |
+| Row2 | `He%3d Lt%4d Cp%4d` | 朝向 Heading（deg）+ 升降 Lift + 夹爪 Clamp 角度（deg，钳制 4 字符） |
+| Row3 | `%s%4d,%4d %c%c%03d` | 前缀 `Man `（调试模式为 `ROOT`）+ 轮式里程计 x,y（cm，钳制 4 字符）+ 轴锁定 `A`/空格 + 驾驶模式 `X`/`Y` + 秒（`%03d`） |
+
+- 每个字段定宽，直接覆盖旧字符，无需清屏。
+- Row3 长度 19 列，符合 Controller 屏幕宽度。
+
+## 备注
+
+- **Root 模式（ButtonLeft）**：全局 `Root_Mode`；开启后 `Clamp`/`Lift` **手动**运动忽略软限位（自动 `runToAngle` 仍受限）；**退出时**仅清除待触发的自动，**不归零、也不关闭轴锁定**（归零改由 `ButtonRight` 触发）。屏幕 Row3 前缀由 `Man ` 变为 `ROOT`。
+- **Root 门禁**：`ButtonB`（手动跑自动）与 `ButtonRight`（归零）**仅在 Root 模式生效**；非 Root 时按下无任何效果。
+- **单例守卫**：`driverControl()` 通过互斥锁保证全程序只运行**一个**循环（`main()` 直调与 `Competition` 自动调用不会重复启动）。
+- **屏幕刷新节流**：`last_refresh_ms` 与 `control_timer` 在入口一起重置，避免计时器重置导致的长时间不刷新（冻屏）。
+- **自动阶段互斥**：当 `Auto_Active`（自动阶段进行中）为真时，主循环**跳过** `serviceHeadingReset/updateChassis/updateLift/updateClamp`，仅刷新屏幕，避免与 `autonomous()` 抢占硬件。
+- 驾驶模式与轴锁定是**两个独立设定**，仅共用同一把互斥锁。
+- `updateLift/updateClamp` 在无按键时调用各机构 `stop()`（升降 hold；夹爪 hold/锁定）。

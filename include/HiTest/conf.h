@@ -1,0 +1,1 @@
+#define HT_TEST_ENABLED

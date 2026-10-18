@@ -1,4 +1,5 @@
 #include "driver-control.h"
+#include "autonomous.h"
 #include "HiDebug.h"
 
 #include <cmath>
@@ -11,21 +12,48 @@ constexpr double kDeadZone = 2.0;
 constexpr int kScreenRefreshMs = 150;
 // Time since driverControl() started; reset on entry.
 vex::timer control_timer;
+// Screen-refresh throttle base; reset together with control_timer on entry.
+int last_refresh_ms = -kScreenRefreshMs;
+// Singleton guard: only one driverControl loop may run (main's direct call vs
+// the Competition drivercontrol callback).
+vex::mutex driver_guard_mutex;
+bool driver_running = false;
 
 // Drive reference frame.
 //   HeadingUp (mode 1): joystick forward follows the robot's current heading.
 //   NorthUp   (mode 2): joystick forward is locked to heading 0 (the "north").
 enum class DriveMode : int { HeadingUp = 1, NorthUp = 2 };
 
-DriveMode drive_mode = DriveMode::HeadingUp; // default mode 1
+DriveMode drive_mode = DriveMode::NorthUp; // default mode 2 (Y, north-up)
 vex::mutex drive_mode_mutex;                 // shared with the button callbacks
 bool heading_reset_requested = false;
+// Axis-aligned translation (Button A): keep only the dominant translation axis.
+bool axis_lock_enabled = false;
+// Debug: Button B requests a single run of the autonomous routine.
+bool run_autonomous_requested = false;
+// Root mode: Button Left toggles "limits off" for Clamp/Lift manual motion.
+bool root_toggle_requested = false;
+// Button Right (Root only): reset the mechanism positions to zero.
+bool reset_position_requested = false;
 
 DriveMode getDriveMode() {
     drive_mode_mutex.lock();
     const DriveMode mode = drive_mode;
     drive_mode_mutex.unlock();
     return mode;
+}
+
+bool getAxisLock() {
+    drive_mode_mutex.lock();
+    const bool enabled = axis_lock_enabled;
+    drive_mode_mutex.unlock();
+    return enabled;
+}
+
+void onAxisLockToggle() {
+    drive_mode_mutex.lock();
+    axis_lock_enabled = !axis_lock_enabled;
+    drive_mode_mutex.unlock();
 }
 
 void onModeToggle() {
@@ -49,34 +77,119 @@ void serviceHeadingReset() {
     heading_reset_requested = false;
     drive_mode_mutex.unlock();
     if (requested) {
-        Heading_Tracker.resetRotation();
+        Odom.resetRotation();
+    }
+}
+
+void onRunAutonomous() {
+    if (!Root_Mode || Auto_Active) {
+        return; // manual autonomous trigger is only available in Root mode
+    }
+    drive_mode_mutex.lock();
+    run_autonomous_requested = true;
+    drive_mode_mutex.unlock();
+}
+
+bool consumeRunAutonomous() {
+    drive_mode_mutex.lock();
+    const bool requested = run_autonomous_requested;
+    run_autonomous_requested = false;
+    drive_mode_mutex.unlock();
+    return requested;
+}
+
+void onRootToggle() {
+    drive_mode_mutex.lock();
+    root_toggle_requested = true;
+    drive_mode_mutex.unlock();
+}
+
+void serviceRootToggle() {
+    drive_mode_mutex.lock();
+    const bool requested = root_toggle_requested;
+    root_toggle_requested = false;
+    drive_mode_mutex.unlock();
+    if (!requested) {
+        return;
+    }
+    const bool was_on = Root_Mode;
+    Root_Mode = !was_on;
+    if (was_on) {
+        // Exiting Root mode: clear the pending manual autonomous trigger.
+        // (Axis-lock is not Root-managed, and position reset is triggered by
+        // Button Right while in Root mode.)
+        drive_mode_mutex.lock();
+        run_autonomous_requested = false;
+        drive_mode_mutex.unlock();
+    }
+}
+
+void onResetPosition() {
+    if (!Root_Mode) {
+        return; // position reset is only available in Root mode
+    }
+    drive_mode_mutex.lock();
+    reset_position_requested = true;
+    drive_mode_mutex.unlock();
+}
+
+void serviceResetPosition() {
+    drive_mode_mutex.lock();
+    const bool requested = reset_position_requested;
+    reset_position_requested = false;
+    drive_mode_mutex.unlock();
+    if (requested) {
+        Mech_Lift.resetPosition();
+        Mech_Clamp.resetPosition();
     }
 }
 } // namespace
 
 void driverControl() {
+    // Only one driverControl loop may run.
+    // driver_guard_mutex.lock();
+    // if (driver_running) {
+    //     driver_guard_mutex.unlock();
+    //     return;
+    // }
+    // driver_running = true;
+    // driver_guard_mutex.unlock();
+
     Debug::Log("[DriverControl] Manual Control Override.\n", Debug::LogLevel::Debug);
     control_timer.reset();
+    last_refresh_ms = -kScreenRefreshMs;
 
     // Register the drive-mode and heading-reset button callbacks once.
     static bool callbacks_registered = false;
     if (!callbacks_registered) {
         Controller.ButtonX.pressed(onModeToggle);
         Controller.ButtonY.pressed(onHeadingReset);
+        Controller.ButtonA.pressed(onAxisLockToggle);
+        Controller.ButtonB.pressed(onRunAutonomous);
+        Controller.ButtonLeft.pressed(onRootToggle);
+        Controller.ButtonRight.pressed(onResetPosition);
         callbacks_registered = true;
     }
 
     // Keep running while the driver control period is active.
     while (true) {
-        serviceHeadingReset();
-        updateChassis();
-        updateLift();
-        updateClamp();
+        // Debug: run the autonomous routine once when requested (Button B).
+        if (consumeRunAutonomous() && !Auto_Active) {
+            autonomous();
+        }
+
+        // While the autonomous routine runs, do not command the hardware (it
+        // would fight the autonomous routine); keep the screen updated only.
+        if (!Auto_Active) {
+            serviceHeadingReset();
+            serviceRootToggle();
+            serviceResetPosition();
+            updateChassis();
+            updateLift();
+            updateClamp();
+        }
         updateControllerScreen();
 
-        // Real-time mechanism telemetry (angles in motor degrees).
-        printf("[Mech] Lift %.1f Clamp %.1f\n", Mech_Lift.position(), Mech_Clamp.position());
-        printf("[Inertial] Heading %.1f Rotation %.1f\n", Heading_Tracker.heading(), Heading_Tracker.rotation());
         vex::this_thread::sleep_for(10);
     }
 }
@@ -84,20 +197,31 @@ void driverControl() {
 void updateChassis() {
     // Left stick: forward/backward (Axis3) and left/right translation (Axis4).
     // Right stick: horizontal axis (Axis1) rotates the robot in place.
-    const double f = deadZone(Controller.Axis3.position(), kDeadZone);
-    const double l = deadZone(Controller.Axis4.position(), kDeadZone);
-    const double r = deadZone(Controller.Axis1.position(), kDeadZone);
+    // Deadzone first, then the input curve (endpoint-preserving, finer near center).
+    const double f = driveCurve(deadZone(Controller.Axis3.position(), kDeadZone));
+    const double l = driveCurve(deadZone(Controller.Axis4.position(), kDeadZone));
+    const double r = driveCurve(deadZone(Controller.Axis1.position(), kDeadZone));
 
     double body_forward = f;
     double body_lateral = l;
 
     if (getDriveMode() == DriveMode::NorthUp) {
         // Rotate the field-frame (north/east) input into the robot's body frame.
-        const double heading_rad = Heading_Tracker.heading() * (M_PI / 180.0);
+        const double heading_rad = Odom.heading() * (M_PI / 180.0);
         const double c = std::cos(heading_rad);
         const double s = std::sin(heading_rad);
         body_forward = f * c + l * s;
         body_lateral = -f * s + l * c;
+    }
+
+    // Axis-aligned mode: after the frame transform, keep only the dominant
+    // translation axis so the robot travels in a straight line.
+    if (getAxisLock()) {
+        if (std::fabs(body_forward) >= std::fabs(body_lateral)) {
+            body_lateral = 0.0; // ties keep forward
+        } else {
+            body_forward = 0.0;
+        }
     }
 
     Chassis.drive(body_forward, body_lateral, r);
@@ -105,10 +229,8 @@ void updateChassis() {
 
 void updateLift() {
     if (Controller.ButtonUp.pressing()) {
-        printf("Controller L1\n");
         Mech_Lift.up();
     } else if (Controller.ButtonDown.pressing()) {
-        printf("Controller L2\n");
         Mech_Lift.down();
     } else {
         Mech_Lift.stop();
@@ -117,10 +239,8 @@ void updateLift() {
 
 void updateClamp() {
     if (Controller.ButtonR2.pressing()) {
-        printf("Controller R2\n");
         Mech_Clamp.close();
     } else if (Controller.ButtonR1.pressing()) {
-        printf("Controller R1\n");
         Mech_Clamp.open();
     } else {
         Mech_Clamp.stop();
@@ -131,7 +251,6 @@ void updateControllerScreen() {
     const int now_ms = control_timer.time();
 
     // Throttle the (slow) screen writes.
-    static int last_refresh_ms = -kScreenRefreshMs;
     if (now_ms - last_refresh_ms < kScreenRefreshMs) {
         return;
     }
@@ -143,6 +262,18 @@ void updateControllerScreen() {
         return magnitude > 99 ? 99 : magnitude;
     };
 
+    // Integer cm clamped to what a 4-char field can hold (-999..9999).
+    const auto clamp4 = [](double value) {
+        int v = static_cast<int>(std::lround(value));
+        if (v > 9999) {
+            v = 9999;
+        }
+        if (v < -999) {
+            v = -999;
+        }
+        return v;
+    };
+
     char row1[20];
     char row2[20];
     char row3[20];
@@ -152,19 +283,25 @@ void updateControllerScreen() {
                   magnitude2(Chassis.wheelOutput(0)), magnitude2(Chassis.wheelOutput(1)),
                   magnitude2(Chassis.wheelOutput(2)), magnitude2(Chassis.wheelOutput(3)));
 
-    // Row 2: mechanism angles in degrees, 4 digits.
-    snprintf(row2, sizeof(row2), "Lift%4d  Clamp%4d",
-                  static_cast<int>(std::lround(Mech_Lift.position())),
-                  static_cast<int>(std::lround(Mech_Clamp.position())));
+    // Row 2: heading + mechanism angles in degrees (He/Lt/Cp).
+    snprintf(row2, sizeof(row2), "He%3d Lt%4d Cp%4d",
+                  static_cast<int>(std::lround(Odom.heading())),
+                  clamp4(Mech_Lift.position()),
+                  clamp4(Mech_Clamp.position()));
 
-    // Row 3: drive mode and elapsed time since driverControl() started (seconds).
+    // Row 3: wheel-odometry position (x forward, y right, cm), axis-lock flag,
+    // drive mode, and elapsed time (seconds).
     int seconds = now_ms / 1000;
     if (seconds > 999) {
         seconds = 999;
     }
+    const int x = clamp4(Odom.wheelX());
+    const int y = clamp4(Odom.wheelY());
+    const char axis_char = getAxisLock() ? 'A' : ' ';
     const char mode_char = (getDriveMode() == DriveMode::NorthUp) ? 'Y' : 'X';
-    snprintf(row3, sizeof(row3), "ManualControl %c %3d", mode_char, seconds);
-
+    const char* label = Root_Mode ? "ROOT" : "Man ";
+    snprintf(row3, sizeof(row3), "%s%4d,%4d %c%c%03d", label, x, y, axis_char, mode_char, seconds);
+                                  
     // Fixed-width fields overwrite the previous frame, so no clear is needed.
     Controller.Screen.setCursor(1, 1);
     Controller.Screen.print("%s", row1);

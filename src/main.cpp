@@ -8,36 +8,53 @@
 /*----------------------------------------------------------------------------*/
 #include "autonomous.h"
 #include "driver-control.h"
+#include "HiTest.h"
 #include "instance.h"
 #include "HiDebug.h"
+#include "HiIO.h"
 #include "vex.h"
 
 void initialize() {
-    // Clear the displays, then emit one startup log to every enabled output.
+    // Inject the Brain into the HiIO module (this also clears the screen and
+    // resets its buffer), then emit one startup log to every enabled output.
+    HiIO::BrainScreen::setBrain(Brain);
     Controller.Screen.clearScreen();
-    Brain.Screen.clearScreen();
-    Debug::Log("[Main] MEKFC5 Starting Up...", Debug::LogLevel::Info);
-
+    // Brain.Screen.setFillColor()
+    Debug::Log("[Main] MEKFC5 v0.33-beta Starting Up...", Debug::LogLevel::Info);
     // Calibrate the inertial sensor until it reports a stable reading.
-    while (!Heading_Tracker.calibrate()) {
+    while (!Odom.calibrate()) {
         vex::this_thread::sleep_for(10);
     }
     Debug::Log("[Main] Inertial Sensor Calibrated.", Debug::LogLevel::Info);
 
-    // Zero the upper mechanisms: the load is manually placed at the bottom and
-    // the clamp manually opened before power-up.
+    // IMU displacement disabled.
+    // Odom.calibrateImuBias();
+
+    // Establish the odometry origin and start the background estimator.
+    // Odom.resetImu(); // IMU displacement disabled
+    Odom.resetWheel();
+    static vex::thread odometry_task(odometryThread);
+
+    // Upper mechanisms at boot: the load is manually placed at the bottom; the
+    // clamp is manually opened, so treat it as being at its maximum angle.
     Mech_Lift.resetPosition();
-    Mech_Clamp.resetPosition();
+    Mech_Clamp.assumeOpen();          // establish reference: open = open_angle
+    Mech_Clamp.calibrateCloseAngle(); // boot calibration of the close angle
+    Debug::Log("[Main] Initialized.", Debug::LogLevel::Info);
+    Controller.Screen.setCursor(1, 1);
+    Controller.Screen.print("Hi Summoner!");
 }
 
 int main() {
-    printf("Hello MEKFC5\r\n");
+    printf("Hello MEKFC5 v0.33-beta\r\n");
     initialize();
 
     // Register the competition callbacks.
     Competition.autonomous(autonomous);
     Competition.drivercontrol(driverControl);
-    driverControl();
+    HiTest(); // displacement unit test (blocks)
+    // autonomous();
+    // driverControl();
     // Keep the program alive so competition control can dispatch callbacks.
     while (true) {
         vex::this_thread::sleep_for(10);
