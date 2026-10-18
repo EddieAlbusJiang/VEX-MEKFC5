@@ -1,78 +1,56 @@
-# Autonomous（自动阶段）
+# 自动阶段 V3
 
-`include/autonomous.h` / `src/autonomous.cpp`，在 `main()` 注册：`Competition.autonomous(autonomous)`。
+L1 执行当前完整路线；L2 保持默认选择，但测试期间不执行路线。`initialize()` 完成后选 L1；手动调试仍在 ROOT 模式按 B 启动。手动调试自动运行中再次按 B 请求停止。
 
-## 当前状态
+## 本次控制方式
 
-`autonomous()` 目前为**占位**：
+- 升降、夹爪使用 V5 电机内置位置控制：发一次位置目标，检查实际到位后停止保持，不再每 10ms 用最低 12% 的正反转指令追目标。
+- 升降自动速度为 `P_LIFT_AUTO_SPEED=45`，手动按键速度仍为 33；自动到位容差为电机轴 5°。夹爪完全张开目标容差为 6°（实车确认 Cp≈85 已释放），关闭和中间目标仍为 2°；两者稳定确认 60ms，小回弹允许原有附加 2° 范围。
+- 起点夹紧和升降回底并行；抬升 574、1797 与转向并行，574 还可在到第一个放置点前的行驶期间继续抬升。放置点接近前等待相应抬升完成；下降、开爪、后退依次执行。
+- 第二次夹取成功后额外保持 250ms（手柄显示 `HOLD`），再开始抬升 1797 和转向。该等待期间仍响应停止及 30 秒总限时。
+- `waitUntilDone()` 只等待已有指令，不重新发一次相同目标。全部阻塞自动调用返回 `AutoResult`，路线检查每个关键动作的结果。
+- 普通机构动作持续 700ms 没有至少 0.5° 的位置变化时返回 `Stalled`，不作为到位成功。第二次夹取另用 `AutoClampGrip(-9)`：按手动闭合零点，闭合行程至少 10°、位置进入有效目标减 2°到 Cp=6° 范围、位置波动不超过 0.5°持续 200ms，可按近闭合接触完成并保持。日志为 `CONTACT`，这是接触推断，不是物品存在/夹牢的传感器证明；大开口处卡住仍失败。
+- 转向接近目标时加入最低有效输出，避免输出过小而空等；到位后使用刹车保持并完成稳定计时。底盘每个动作不再高频打印位置日志。
+- 底盘最终到位稳定确认由 50ms 改为 20ms，队列交接轮询由 10ms 改为 2ms。原地转向和反向移动仍需实际减速，不能等同于连续经过点。
+- 第二次夹取使用 `AutoMoveVia(4,47,3,47)`：进入 `(4,47)` 的到位容差范围后，同一工作线程立即切换到 `(3,47)`，中途不停车、不做稳定等待。经过点接近时最低平移指令为 20%，仍受速度上限限制；最终点保留到位与停车检查，完成后才夹紧。
+- 第一次放置、退到 `(6,-46)` 后转向 90° 的速度上限为 65，其余两次转向仍为 45。自动平移在剩余误差大于等于 20cm 时采用 85% 输出上限，6～20cm 平滑过渡，6cm 内恢复原 75% 上限；误差按 X/Y 较大者计算。手动驾驶和转向的基础输出比例保持 75%。实际节省时间需实车验证。
+- 完整路线受 30 秒总预算约束；超过预算或动作失败就停止，等待后台动作退出后再交回手动控制。**到时停止不等于完整完成，只有完成所有步骤才显示 DONE。实际能否在 30 秒内完成必须实车验证。**
 
-```cpp
-void autonomous() {
-    Auto_Active = true;            // 阶段互斥：让 driverControl 暂停命令硬件
-    Chassis.setIdleBrake(false);   // 自动期间关闭逐轮 idle-brake
+## 手柄显示
 
-    // 示例（当前未执行）：
-    // Chassis.AutoMoveTo(50.0, 0.0);
-    // Chassis.AutoRotateTo(90.0);
-    // Chassis.AutoMoveFor(-50.0, 0.0);
-    // Chassis.AutoRotateFor(-90.0);
+运行时第一行示例：`V3 07 L179 12.3s`，表示第 7 步正在下降到 179，总耗时 12.3 秒。
 
-    vex::timer timer;
-    printf(" [AUTON] Time: %dms\n", timer.time());
+第二行继续显示 `He`、`Lt`、`Cp`；第三行显示当前步骤已用秒数与 `X/Y`。第一行的时间是整个自动阶段总耗时。
 
-    Chassis.setIdleBrake(true);    // 恢复
-    Auto_Active = false;
-}
-```
+运行结束后第一行保留结果与总耗时，第三行保留最后步骤编号、动作名和该步耗时，下一次运行会刷新。
 
-- **启动清零位姿**：`autonomous()` 起始处调用 `Odom.resetRotation()/resetWheel()`（IMU 位移已禁用，`resetImu` 已注释），把**朝向与轮式里程计位置**归零，使例程中的**绝对目标**总是相对“本次自动的起点与朝向”（无论从场控、`ButtonB` 还是开机直调触发）。
-- **阶段互斥**：`Auto_Active`（`instance.*` 中的 `volatile bool`）在自动阶段置位，`driverControl()` 见其为真时**不再命令底盘/机构**（仅刷新屏幕），避免与 `autonomous()` 互相打断。
-- **调试触发**：在手动阶段按 `ButtonB` 可**同步跑一遍** `autonomous()`（运行中再次按被忽略）；起止由 `autonomous()` 首尾的 `Debug::Log("[Auto] start/done")` 提示。
-- **idle-brake 在自动阶段首尾统一关闭/恢复**（避免逐轮锁死扭曲 holonomic 运动），不在自动函数内部单独开关。
+- `DONE`：完整完成。
+- `STALLED`：机构受阻或没有明显位移。结合步骤 `OPEN/CLOSE/L179/L1797/L1534` 和第二行实际位置检查。
+- `TIMEOUT`：某动作未到位，或总时间达到 30 秒。
+- `STOP`：手动中止。
 
-## 可用接口
+Brain/电脑日志由后台线程按顺序输出，屏幕重绘和 USB 输出不再阻塞动作调用。缓冲区为 128 条，满时保留新日志并提示丢弃旧日志。日志显示动作耗时和实际位置，经过点不单独输出结束日志；手柄 `PICK2` 的计时包括经过点和最终接近两段。启动日志含 `AUTO V3`。
 
-**每个 Auto 均有“阻塞 / 非阻塞”两种重载**：阻塞版形如 `AutoXxx(args..., speed = 默认)`；非阻塞版形如 `AutoXxx(args..., void (*onDone)(void), speed = 默认)`（回调可为 `nullptr`）——入队即返回，由各自 worker 线程执行，完成时回调。三类（底盘/升降/夹爪）各有一个 worker，**可并行**。
+## 路线与顺序
 
-**底盘（`XDrive`，坐标系=开机系、原点=开机位置、cm）**
-```cpp
-// 阻塞
-Chassis.AutoMoveTo(tx, ty, speed = P_AUTO_SPEED);
-Chassis.AutoMoveFor(dx, dy, speed = P_AUTO_SPEED);
-Chassis.AutoRotateTo(tdeg, speed = P_AUTO_SPEED);
-Chassis.AutoRotateFor(ddeg, speed = P_AUTO_SPEED);
-// 特快位移：世界系相对位移、最大速度、无 PID、无减速、不保持朝向（仅阻塞）
-Chassis.AutoFastMoveFor(dx, dy);
-// 非阻塞
-Chassis.AutoMoveTo(tx, ty, onDone /*可为 nullptr*/, speed = P_AUTO_SPEED);
-// …其余同理
-```
+位置目标为 `(7,0)` → `(7,-46)` → `(19,-51)` → `(6,-46)` → `(4,47)`（连续经过）→ `(3,47)`（停稳夹取）→ `(18,45)` → `(8,45)` → `(8,0)` → `(42,0)` → `(-19,0)` → `(102,-17)`；原有转向目标 270°、90°、267° 保留。
 
-**升降（`Lift`）**
-```cpp
-Mech_Lift.AutoLiftTo(deg, speed = P_LIFT_SPEED);                 // 阻塞
-Mech_Lift.AutoLiftTo(deg, onDone, speed = P_LIFT_SPEED);         // 非阻塞
-Mech_Lift.AutoLiftUp(speed = P_LIFT_SPEED);
-Mech_Lift.AutoLiftUp(onDone, speed = P_LIFT_SPEED);
-// …
-```
+夹爪目标保持 0、90、-9、90，仍受原软限位限制；第二次夹取改用带接触判断的 `AutoClampGrip(-9)`，其余继续使用 `AutoClampTo`。本次不改变零点或开合端点，不引入 67° 目标。自动起点沿用团队手动调整后的 `Cp=0`，自动入口只清底盘位置和航向。
 
-**夹爪（`Clamp`）**
-```cpp
-Mech_Clamp.AutoClampOpen(speed = P_CLAMP_SPEED);          // 阻塞
-Mech_Clamp.AutoClampOpen(onDone, speed = P_CLAMP_SPEED);  // 非阻塞
-// …
-```
+开机初始化仍保留原有 `assumeOpen()` 和关闭端校准。ROOT 右键仍同时清零升降和夹爪；若使用它建立采集参考，升降须在原来的底部、夹爪须在原来的闭合参考位置，保持与测量时一致。
 
-## 前置条件
+## 接口
 
-- 位移依赖里程计，`initialize()` 已完成：惯性校准、原点复位（`resetWheel`），并启动了 `odometryThread`（IMU 位移已禁用）。
-- 升降/夹爪零点由 `initialize()` 的 `resetPosition()` 建立（开机前需手动复位）。
+底盘、升降、夹爪各有独立工作线程，可跨机构并行。同一机构的命令按队列顺序执行。异步重载带 `nullptr` 或回调参数；队列满时等待空间，不再静默丢弃指令。回调运行在工作线程中，不能在回调里调用该机构的阻塞自动接口，也不能提交超过队列容量的命令。
 
-## 注意事项
+`AutoResult` 包含 `Idle/Running/Reached/Timeout/Stalled/Cancelled`。阻塞调用返回本次结果；当前路线每个子系统最多保留一个待完成动作。`waitUntilDone()` 等待调用时已排队的全部动作，并返回最后结果。
 
-- **阻塞版**：含超时与到位稳定判定；按顺序调用即可串联多步（经队列由 worker 执行）。
-- **非阻塞版**：入队即返回；多子系统可并行；完成后回调通知；队列满（`P_AUTO_QUEUE`）则**丢弃**新请求。
-- ⚠️ **禁止在回调中调用阻塞版 Auto**（回调运行于 worker 线程，会与 worker 互等 → 死锁）。本项目无重入场景。
-- 位移使用**轮式里程计**位置；打滑、低速受阻可能导致超时。
-- 参数集中在 `config.h`（`P_AUTO_*`、`P_LIFT_TOL`、`P_CLAMP_*`、`P_MECH_*`、`P_AUTO_QUEUE`）。
+## 验证
+
+`python3 tests/run_auto_checks.py` 使用传感器轨迹和模拟动作时间检查实际控制代码中的到位、回弹、停滞、取消、路线顺序和总时间限制；这不是实车速度或成功率验证。用 VEX 工具链构建后，还需烧录并在原起点试跑。
+
+最后一次放置时的升降目标为 `1534`（电机轴角度），随后张开夹爪并后退。
+
+第二次夹取两点只差 1cm，该连续路径的到位容差自动收紧到 0.25cm，避免将后一个点直接判为到位。普通长段仍使用原 1cm 容差。
+
+第一次转向 270° 完成后，若抬升 574 的队列已完成且结果成功，连续经过 `(7,-46)` 到 `(19,-51)`；否则沿用移动到清空点、等待抬升完成、再接近放置点的顺序。失败结果不会当作抬升完成。

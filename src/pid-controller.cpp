@@ -11,6 +11,7 @@ void PIDController::reset() {
     prev_error_ = 0.0;
     error_integral_ = 0.0;
     output_ = 0.0;
+    has_previous_sample_ = false;
 }
 
 void PIDController::update(double error) {
@@ -22,7 +23,8 @@ void PIDController::update(double error) {
     const double P = params_.kP * error;
 
     // D: derivative (guarded against a non-positive time step)
-    const double D = (dt > 0.0) ? (params_.kD * (error - prev_error_) / dt) : 0.0;
+    const double D = (has_previous_sample_ && dt > 0.0) ?
+        (params_.kD * (error - prev_error_) / dt) : 0.0;
 
     // I: integral
     error_integral_ += error * dt;
@@ -32,6 +34,7 @@ void PIDController::update(double error) {
 
     prev_time_ = now;
     prev_error_ = error;
+    has_previous_sample_ = true;
 }
 
 double PIDController::output() const { return output_; }

@@ -20,6 +20,7 @@ class PIDController {
     double prev_error_ = 0.0;
     double error_integral_ = 0.0;
     double output_ = 0.0;
+    bool has_previous_sample_ = false;
     // If true, dt is measured in seconds (D/I use per-second units); default ms.
     bool use_seconds_ = false;
 

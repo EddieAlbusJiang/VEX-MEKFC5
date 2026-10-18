@@ -1,5 +1,6 @@
 #include "clamp.h"
 #include "calc.h"
+#include "mechanism-motion.h"
 #include "HiDebug.h"
 #include "instance.h"
 
@@ -21,8 +22,8 @@ Clamp::Clamp(vex::motor& motor, double open_angle, double close_angle, double sp
 
 double Clamp::position() const { return motor_.position(vex::rotationUnits::deg); }
 
-bool Clamp::isOpen() const { return position() <= open_angle_; }
-bool Clamp::isClosed() const { return position() >= close_angle_; }
+bool Clamp::isOpen() const { return position() >= open_angle_ - tolerance_; }
+bool Clamp::isClosed() const { return position() <= close_angle_ + tolerance_; }
 
 void Clamp::moveBy(int direction) {
     // Advance the recorded target by the distance travelled in one tick,
@@ -149,66 +150,67 @@ void Clamp::setLockTolerance(double tolerance) { tolerance_ = std::fabs(toleranc
 
 void Clamp::setLockGains(double kP, double kD, double kI) { pid_.setGains(PIDParam{kP, kD, kI}); }
 
-void Clamp::runToAngle(double target_deg, double speed) {
-    // Clamp the target within the reachable range.
+void Clamp::runToAngle(double target_deg, double speed, bool loaded_grip) {
+    const double requested_target = target_deg;
     target_deg = std::max(close_angle_, std::min(target_deg, open_angle_));
-
-    const double prev_speed = speed_;
-    setSpeed(speed);
-
+    speed = std::max(0.0, std::min(speed, 100.0));
+    // Relax only the full-open endpoint; closing/intermediate targets retain
+    // the original tolerance and the encoder reference is unchanged.
+    const double tolerance = std::fabs(target_deg - open_angle_) < 1e-6 ?
+        P_CLAMP_AUTO_OPEN_TOL : P_CLAMP_AUTO_TOL;
     vex::timer timer;
-    vex::timer settle;
-    bool holding = false;
-    while (timer.time() < P_MECH_TIMEOUT_MS) {
-        const double pos = position();
-        const double err = target_deg - pos;
-        const double mag = std::fabs(err);
-
-        if (mag <= tolerance_) {
-            holding = true;
-            motor_.stop(vex::brakeType::hold);
-            if (settle.time() >= P_MECH_SETTLE_MS) {
-                break;
-            }
-        } else if (holding && mag <= tolerance_ + P_MECH_HYSTERESIS) {
-            // Within the hysteresis band while holding: stay put (no chatter).
-            motor_.stop(vex::brakeType::hold);
-        } else if ((err > 0.0 && pos >= open_angle_) || (err < 0.0 && pos <= close_angle_)) {
-            motor_.stop(vex::brakeType::hold); // blocked by a limit before reaching target
-            break;
-        } else {
-            holding = false;
-            settle.reset();
-            const double cmd = approachSpeed(speed_, err, P_MECH_DECEL_TOL, P_MECH_MIN_OUTPUT);
-            if (err > 0.0) {
-                motor_.spin(vex::directionType::fwd, cmd, vex::velocityUnits::pct);
-            } else {
-                motor_.spin(vex::directionType::rev, cmd, vex::velocityUnits::pct);
-            }
-        }
-        vex::this_thread::sleep_for(10);
-    }
-
-    motor_.stop(vex::brakeType::hold);
-    locked_position_ = position(); // keep the lock consistent with the new position
+    const GripContactRule grip{
+        target_deg - tolerance,
+        base_close_angle_ + P_CLAMP_GRIP_MAX_POSITION,
+        P_CLAMP_GRIP_MIN_TRAVEL,
+        P_CLAMP_GRIP_STABLE_DEG,
+        P_CLAMP_GRIP_SETTLE_MS
+    };
+    bool contact_reached = false;
+    const bool allow_contact = loaded_grip && target_deg <= base_close_angle_;
+    auto_result_ = AutoResult::Running;
+    auto_result_ = runMechanismPosition(motor_, target_deg, speed,
+                                        tolerance, P_CLAMP_AUTO_TIMEOUT_MS,
+                                        allow_contact ? &grip : nullptr, &contact_reached);
+    locked_position_ = position();
     locking_ = false;
-    setSpeed(prev_speed);
+    pid_.reset();
+    const auto level = auto_result_ == AutoResult::Reached ?
+        Debug::LogLevel::Info : Debug::LogLevel::Warning;
+    Debug::Log("[Clamp] " + std::string(contact_reached ? "CONTACT" : autoResultName(auto_result_)) + " " +
+                   Debug::doubleToString(timer.time(), 0) + "ms tol=" +
+                   Debug::doubleToString(tolerance, 1), level);
+    Debug::Log("[Clamp] req=" + Debug::doubleToString(requested_target, 1) +
+                   " T=" + Debug::doubleToString(target_deg, 1) +
+                   " Cp=" + Debug::doubleToString(position(), 1), level);
 }
 
-void Clamp::AutoClampTo(double target_deg, double speed) { blockingAuto(AutoKind::To, target_deg, speed); }
+AutoResult Clamp::AutoClampTo(double target_deg, double speed) { blockingAuto(AutoKind::To, target_deg, speed); return auto_result_; }
 
-void Clamp::AutoClampFor(double delta_deg, double speed) { blockingAuto(AutoKind::For, delta_deg, speed); }
+AutoResult Clamp::AutoClampFor(double delta_deg, double speed) { blockingAuto(AutoKind::For, delta_deg, speed); return auto_result_; }
 
-void Clamp::AutoClampOpen(double speed) { blockingAuto(AutoKind::Open, 0.0, speed); }
+AutoResult Clamp::AutoClampOpen(double speed) { blockingAuto(AutoKind::Open, 0.0, speed); return auto_result_; }
 
-void Clamp::AutoClampClose(double speed) { blockingAuto(AutoKind::Close, 0.0, speed); }
+AutoResult Clamp::AutoClampClose(double speed) { blockingAuto(AutoKind::Close, 0.0, speed); return auto_result_; }
+
+AutoResult Clamp::AutoClampGrip(double target_deg, double speed) { blockingAuto(AutoKind::Grip, target_deg, speed); return auto_result_; }
 
 // ---------------------------------------------------------------------------
 // Auto command queue + worker thread (see x-drive.cpp for the same pattern).
 // Blocking overloads enqueue and wait (ticket); non-blocking overloads enqueue
-// (dropping when full) and return. NOTE: do NOT call a blocking Auto from
+// (waiting for queue space if full) and return. NOTE: do NOT call a blocking Auto from
 // inside a callback (deadlock).
 // ---------------------------------------------------------------------------
+
+AutoResult Clamp::waitUntilDone() {
+    auto_queue_mutex_.lock();
+    const int ticket = auto_enqueued_;
+    auto_queue_mutex_.unlock();
+    while (auto_completed_ < ticket) {
+        vex::this_thread::sleep_for(10);
+    }
+    return auto_result_;
+}
 
 void Clamp::workerTrampoline() { s_instance_->autoWorkerLoop(); }
 
@@ -275,6 +277,9 @@ void Clamp::autoWorkerLoop() {
             case AutoKind::To:
                 runToAngle(cmd.a, cmd.speed);
                 break;
+            case AutoKind::Grip:
+                runToAngle(cmd.a, cmd.speed, true);
+                break;
             case AutoKind::For:
                 runToAngle(position() + cmd.a, cmd.speed);
                 break;
@@ -295,20 +300,28 @@ void Clamp::autoWorkerLoop() {
 
 void Clamp::AutoClampTo(double target_deg, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::To, target_deg, 0.0, speed, onDone}); // drop if full
+    while (enqueueAuto(AutoCmd{AutoKind::To, target_deg, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
 
 void Clamp::AutoClampFor(double delta_deg, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::For, delta_deg, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::For, delta_deg, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
 
 void Clamp::AutoClampOpen(void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::Open, 0.0, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::Open, 0.0, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
 
 void Clamp::AutoClampClose(void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::Close, 0.0, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::Close, 0.0, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }

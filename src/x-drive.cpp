@@ -9,6 +9,7 @@
 namespace {
 // Wheel speed (pct) below which a wheel is considered stopped.
 constexpr double kBrakeVelEps = 0.5;
+constexpr int kQueuePollMs = 2;
 
 // Symmetric clamp to [-limit, limit].
 double clampSym(double value, double limit) {
@@ -105,6 +106,10 @@ double XDrive::applyMotor(vex::motor& motor, bool& held, double output) {
 }
 
 void XDrive::drive(double forward, double lateral, double rotational) {
+    driveWithLimit(forward, lateral, rotational, max_output_);
+}
+
+void XDrive::driveWithLimit(double forward, double lateral, double rotational, double output_limit) {
     const double f = forward * forward_gain_;
     const double l = lateral * lateral_gain_;
     const double r = rotational * rotational_gain_;
@@ -122,7 +127,7 @@ void XDrive::drive(double forward, double lateral, double rotational) {
     // resulting motion direction is preserved instead of being clipped.
     const double peak = std::max({std::fabs(output_l1), std::fabs(output_l2), std::fabs(output_r1), std::fabs(output_r2)});
     double scale = (peak > 100.0) ? (100.0 / peak) : 1.0;
-    scale *= max_output_; // speed cap
+    scale *= std::max(0.0, std::min(output_limit, 1.0)); // speed cap
 
     last_output_[0] = applyMotor(l1_, held_[0], output_l1 * scale);
     last_output_[1] = applyMotor(l2_, held_[1], output_l2 * scale);
@@ -161,112 +166,169 @@ double XDrive::wheelOutput(int index) const {
 
 bool XDrive::isBraking() const { return braking_; }
 
-void XDrive::runMove(double target_x, double target_y, double speed) {
+void XDrive::runMove(double target_x, double target_y, double speed, bool pass_through, double tolerance) {
     const double entry_heading = odom_.heading();
-
     ensureAutoPidUnits();
     pid_move_forward.reset();
     pid_move_lateral.reset();
     pid_rot.reset();
-
     const double limit = std::fabs(speed);
     vex::timer timer;
     vex::timer settle;
-    static int dbg = 0;
+    bool holding = false;
+    auto_result_ = AutoResult::Running;
     while (timer.time() < P_AUTO_TIMEOUT_MS) {
+        if (autonomousStopRequested()) {
+            auto_result_ = AutoResult::Cancelled;
+            break;
+        }
         const double ex = target_x - odom_.wheelX();
         const double ey = target_y - odom_.wheelY();
-
-        // Rotate the field-frame error into the body frame.
-        const double th = odom_.heading() * (M_PI / 180.0);
-        const double c = std::cos(th);
-        const double s = std::sin(th);
-        const double bf = ex * c + ey * s;
-        const double bl = -ex * s + ey * c;
-
-        pid_move_forward.update(bf);
-        pid_move_lateral.update(bl);
-        pid_rot.update(degNorm180(entry_heading - odom_.heading()));
-
-        double fwd = clampSym(pid_move_forward.output(), limit);
-        double lat = clampSym(pid_move_lateral.output(), limit);
-        const double rot = clampSym(pid_rot.output(), limit);
-
-        // At the target: hold translation (no crawl during settle); heading
-        // correction still applies. Otherwise enforce a minimum translation
-        // magnitude so the final approach does not slow to a crawl.
-        const bool at_target = (std::fabs(ex) < P_AUTO_POS_TOL && std::fabs(ey) < P_AUTO_POS_TOL);
+        const double error = std::max(std::fabs(ex), std::fabs(ey));
+        const double rebound = std::min(P_AUTO_POS_HYSTERESIS, tolerance * 0.5);
+        const bool at_target = error <= tolerance ||
+            (holding && error <= tolerance + rebound);
         if (at_target) {
-            fwd = 0.0;
-            lat = 0.0;
-        } else {
-            const double m = std::sqrt(fwd * fwd + lat * lat);
-            if (m > 1e-6 && m < P_AUTO_MIN_OUTPUT) {
-                const double k = P_AUTO_MIN_OUTPUT / m;
-                fwd = clampSym(fwd * k, limit);
-                lat = clampSym(lat * k, limit);
+            if (pass_through) {
+                // Only runMoveVia uses this: its next target is already owned
+                // by this worker, so no logging/queue wait with motors running.
+                auto_result_ = AutoResult::Reached;
+                return;
             }
-        }
-
-        // TEMP diagnostic (console), throttled.
-        if (++dbg % 5 == 0) {
-            printf("[AUTO] ex=%.1f ey=%.1f bf=%.1f bl=%.1f fwd=%.1f lat=%.1f rot=%.1f h=%.1f\n",
-                   ex, ey, bf, bl, fwd, lat, rot, odom_.heading());
-        }
-
-        drive(fwd, lat, rot);
-
-        if (std::fabs(ex) < P_AUTO_POS_TOL && std::fabs(ey) < P_AUTO_POS_TOL) {
+            if (!holding) {
+                stop(vex::brakeType::hold);
+                settle.reset();
+                holding = true;
+            }
             if (settle.time() >= P_AUTO_SETTLE_MS) {
+                auto_result_ = AutoResult::Reached;
                 break;
             }
         } else {
-            settle.reset();
+            if (holding) {
+                pid_move_forward.reset();
+                pid_move_lateral.reset();
+                pid_rot.reset();
+                holding = false;
+            }
+            const double th = odom_.heading() * (M_PI / 180.0);
+            const double c = std::cos(th), sn = std::sin(th);
+            const double bf = ex * c + ey * sn;
+            const double bl = -ex * sn + ey * c;
+            pid_move_forward.update(bf);
+            pid_move_lateral.update(bl);
+            pid_rot.update(degNorm180(entry_heading - odom_.heading()));
+            double fwd = clampSym(pid_move_forward.output(), limit);
+            double lat = clampSym(pid_move_lateral.output(), limit);
+            const double rot = clampSym(pid_rot.output(), limit);
+            const double magnitude = std::sqrt(fwd * fwd + lat * lat);
+            const double min_output = pass_through ? P_AUTO_PASS_MIN_OUTPUT : P_AUTO_MIN_OUTPUT;
+            if (magnitude > 1e-6 && magnitude < min_output) {
+                const double scale = min_output / magnitude;
+                fwd = clampSym(fwd * scale, limit);
+                lat = clampSym(lat * scale, limit);
+            }
+            // Increase travel speed only away from the target. Blend back to
+            // the original cap before pickup/placement, without a speed step.
+            const double blend = std::max(0.0, std::min(1.0,
+                (error - P_AUTO_TRANSIT_BLEND_START_CM) /
+                (P_AUTO_TRANSIT_BLEND_END_CM - P_AUTO_TRANSIT_BLEND_START_CM)));
+            const double transit_limit = std::max(max_output_, P_AUTO_TRANSIT_MAX_OUTPUT);
+            const double output_limit = max_output_ + blend * (transit_limit - max_output_);
+            driveWithLimit(fwd, lat, rot, output_limit);
         }
         vex::this_thread::sleep_for(10);
     }
-
+    if (auto_result_ == AutoResult::Running) auto_result_ = AutoResult::Timeout;
     stop(vex::brakeType::hold);
+    const auto level = auto_result_ == AutoResult::Reached ?
+        Debug::LogLevel::Info : Debug::LogLevel::Warning;
+    Debug::Log("[Move] " + std::string(autoResultName(auto_result_)) + " " +
+                   Debug::doubleToString(timer.time(), 0) + "ms", level);
+    Debug::Log("[Move] X=" + Debug::doubleToString(odom_.wheelX(), 1) +
+                   " Y=" + Debug::doubleToString(odom_.wheelY(), 1), level);
+}
+
+void XDrive::runMoveVia(double via_x, double via_y, double target_x, double target_y, double speed) {
+    const double dx = target_x - via_x, dy = target_y - via_y;
+    const double spacing = std::sqrt(dx * dx + dy * dy);
+    if (spacing < 1e-6) {
+        runMove(target_x, target_y, speed);
+        return;
+    }
+    // Distinct short waypoints must not share overlapping arrival regions.
+    // The 1cm pickup adjustment gets 0.25cm tolerance at both endpoints.
+    const double tolerance = std::min(P_AUTO_POS_TOL, spacing * 0.25);
+    runMove(via_x, via_y, speed, true, tolerance);
+    if (auto_result_ == AutoResult::Reached) {
+        runMove(target_x, target_y, speed, false, tolerance);
+    }
 }
 
 void XDrive::runRotate(double target_deg, double speed) {
     ensureAutoPidUnits();
     pid_rot.reset();
-
     const double limit = std::fabs(speed);
     vex::timer timer;
     vex::timer settle;
-    static int dbg = 0;
+    bool holding = false;
+    auto_result_ = AutoResult::Running;
     while (timer.time() < P_AUTO_TIMEOUT_MS) {
-        const double herr = degNorm180(target_deg - odom_.heading());
-        pid_rot.update(herr);
-        const double rot = clampSym(pid_rot.output(), limit);
-
-        // TEMP diagnostic (console), throttled.
-        // if (++dbg % 5 == 0) {
-        //     printf("[AUTO] tdeg=%.1f h=%.1f herr=%.1f rot=%.1f\n", target_deg, odom_.heading(), herr, rot);
-        // }
-
-        drive(0.0, 0.0, rot);
-
-        if (std::fabs(herr) < P_AUTO_ANGLE_TOL) {
+        if (autonomousStopRequested()) {
+            auto_result_ = AutoResult::Cancelled;
+            break;
+        }
+        const double error = degNorm180(target_deg - odom_.heading());
+        const double mag = std::fabs(error);
+        const bool at_target = mag <= P_AUTO_ANGLE_TOL ||
+            (holding && mag <= P_AUTO_ANGLE_TOL + P_AUTO_ANGLE_HYSTERESIS);
+        if (at_target) {
+            if (!holding) {
+                stop(vex::brakeType::hold);
+                settle.reset();
+                holding = true;
+            }
             if (settle.time() >= P_AUTO_SETTLE_MS) {
+                auto_result_ = AutoResult::Reached;
                 break;
             }
         } else {
-            settle.reset();
+            if (holding) {
+                pid_rot.reset();
+                holding = false;
+            }
+            pid_rot.update(error);
+            double rot = clampSym(pid_rot.output(), limit);
+            // Overcome static friction when approaching; preserve opposite-sign
+            // derivative braking rather than boosting it into another reversal.
+            if (rot * error >= 0.0 && std::fabs(rot) < P_AUTO_ROT_MIN_OUTPUT) {
+                rot = (error > 0.0 ? 1.0 : -1.0) * std::min(limit, P_AUTO_ROT_MIN_OUTPUT);
+            }
+            drive(0.0, 0.0, rot);
         }
         vex::this_thread::sleep_for(10);
     }
-
+    if (auto_result_ == AutoResult::Running) auto_result_ = AutoResult::Timeout;
     stop(vex::brakeType::hold);
+    const auto level = auto_result_ == AutoResult::Reached ?
+        Debug::LogLevel::Info : Debug::LogLevel::Warning;
+    Debug::Log("[Turn] " + std::string(autoResultName(auto_result_)) + " " +
+                   Debug::doubleToString(timer.time(), 0) + "ms H=" +
+                   Debug::doubleToString(odom_.heading(), 1), level);
 }
 
 void XDrive::runFastMove(double dx, double dy) {
+    auto_result_ = AutoResult::Running;
+    if (autonomousStopRequested()) {
+        auto_result_ = AutoResult::Cancelled;
+        stop(vex::brakeType::hold);
+        return;
+    }
     const double sx = odom_.wheelX();
     const double sy = odom_.wheelY();
     const double D = std::sqrt(dx * dx + dy * dy);
     if (D < P_AUTO_POS_TOL) {
+        auto_result_ = AutoResult::Reached;
         stop(vex::brakeType::hold);
         return;
     }
@@ -290,34 +352,55 @@ void XDrive::runFastMove(double dx, double dy) {
 
     vex::timer timer;
     while (timer.time() < P_AUTO_TIMEOUT_MS) {
+        if (autonomousStopRequested()) {
+            auto_result_ = AutoResult::Cancelled;
+            break;
+        }
         const double rx = (sx + dx) - odom_.wheelX(); // remaining (world frame)
         const double ry = (sy + dy) - odom_.wheelY();
         const double proj = (rx * dx + ry * dy) / D;  // remaining along the target direction
         if (proj <= P_AUTO_POS_TOL) {                 // reached / passed -> stop
+            auto_result_ = AutoResult::Reached;
             break;
         }
         vex::this_thread::sleep_for(10);
     }
+    if (auto_result_ == AutoResult::Running) auto_result_ = AutoResult::Timeout;
     stop(vex::brakeType::hold);
 }
 
-void XDrive::AutoMoveTo(double target_x, double target_y, double speed) { blockingAuto(AutoKind::MoveTo, target_x, target_y, speed); }
+AutoResult XDrive::AutoMoveTo(double target_x, double target_y, double speed) { blockingAuto(AutoKind::MoveTo, target_x, target_y, speed); return auto_result_; }
 
-void XDrive::AutoMoveFor(double diff_x, double diff_y, double speed) { blockingAuto(AutoKind::MoveFor, diff_x, diff_y, speed); }
+AutoResult XDrive::AutoMoveVia(double via_x, double via_y, double target_x, double target_y, double speed) {
+    blockingAuto(AutoKind::MoveVia, via_x, via_y, speed, target_x, target_y);
+    return auto_result_;
+}
 
-void XDrive::AutoRotateTo(double target_deg, double speed) { blockingAuto(AutoKind::RotateTo, target_deg, 0.0, speed); }
+AutoResult XDrive::AutoMoveFor(double diff_x, double diff_y, double speed) { blockingAuto(AutoKind::MoveFor, diff_x, diff_y, speed); return auto_result_; }
 
-void XDrive::AutoRotateFor(double diff_deg, double speed) { blockingAuto(AutoKind::RotateFor, diff_deg, 0.0, speed); }
+AutoResult XDrive::AutoRotateTo(double target_deg, double speed) { blockingAuto(AutoKind::RotateTo, target_deg, 0.0, speed); return auto_result_; }
 
-void XDrive::AutoFastMoveFor(double diff_x, double diff_y) { blockingAuto(AutoKind::FastFor, diff_x, diff_y, 0.0); }
+AutoResult XDrive::AutoRotateFor(double diff_deg, double speed) { blockingAuto(AutoKind::RotateFor, diff_deg, 0.0, speed); return auto_result_; }
+
+AutoResult XDrive::AutoFastMoveFor(double diff_x, double diff_y) { blockingAuto(AutoKind::FastFor, diff_x, diff_y, 0.0); return auto_result_; }
 
 // ---------------------------------------------------------------------------
 // Non-blocking auto: a per-object worker thread drains a fixed-size command
 // queue. Blocking overloads enqueue and wait on a ticket; non-blocking overloads
-// enqueue (dropping when full) and return immediately.
+// enqueue and return; if full, wait for queue space rather than losing a move.
 // NOTE: do NOT call a blocking Auto from inside a callback (would deadlock the
 // worker thread that runs the callback).
 // ---------------------------------------------------------------------------
+
+AutoResult XDrive::waitUntilDone() {
+    auto_queue_mutex_.lock();
+    const int ticket = auto_enqueued_;
+    auto_queue_mutex_.unlock();
+    while (auto_completed_ < ticket) {
+        vex::this_thread::sleep_for(kQueuePollMs);
+    }
+    return auto_result_;
+}
 
 void XDrive::workerTrampoline() { s_instance_->autoWorkerLoop(); }
 
@@ -347,18 +430,18 @@ int XDrive::enqueueAuto(const AutoCmd& cmd) {
     return ticket;
 }
 
-void XDrive::blockingAuto(AutoKind kind, double a, double b, double speed) {
+void XDrive::blockingAuto(AutoKind kind, double a, double b, double speed, double c, double d) {
     ensureAutoWorker();
-    const AutoCmd cmd{kind, a, b, speed, nullptr};
+    const AutoCmd cmd{kind, a, b, speed, nullptr, c, d};
     int ticket = -1;
     do {
         ticket = enqueueAuto(cmd);
         if (ticket < 0) {
-            vex::this_thread::sleep_for(10);
+            vex::this_thread::sleep_for(kQueuePollMs);
         }
     } while (ticket < 0);
     while (auto_completed_ < ticket) {
-        vex::this_thread::sleep_for(10);
+        vex::this_thread::sleep_for(kQueuePollMs);
     }
 }
 
@@ -376,13 +459,16 @@ void XDrive::autoWorkerLoop() {
         auto_queue_mutex_.unlock();
 
         if (!have) {
-            vex::this_thread::sleep_for(10);
+            vex::this_thread::sleep_for(kQueuePollMs);
             continue;
         }
 
         switch (cmd.kind) {
             case AutoKind::MoveTo:
                 runMove(cmd.a, cmd.b, cmd.speed);
+                break;
+            case AutoKind::MoveVia:
+                runMoveVia(cmd.a, cmd.b, cmd.c, cmd.d, cmd.speed);
                 break;
             case AutoKind::MoveFor:
                 runMove(odom_.wheelX() + cmd.a, odom_.wheelY() + cmd.b, cmd.speed);
@@ -407,22 +493,28 @@ void XDrive::autoWorkerLoop() {
 
 void XDrive::AutoMoveTo(double target_x, double target_y, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::MoveTo, target_x, target_y, speed, onDone}); // drop if full
+    while (enqueueAuto(AutoCmd{AutoKind::MoveTo, target_x, target_y, speed, onDone, 0.0, 0.0}) < 0) {
+        vex::this_thread::sleep_for(kQueuePollMs);
+    }
 }
 
 void XDrive::AutoMoveFor(double diff_x, double diff_y, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::MoveFor, diff_x, diff_y, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::MoveFor, diff_x, diff_y, speed, onDone, 0.0, 0.0}) < 0) {
+        vex::this_thread::sleep_for(kQueuePollMs);
+    }
 }
 
 void XDrive::AutoRotateTo(double target_deg, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::RotateTo, target_deg, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::RotateTo, target_deg, 0.0, speed, onDone, 0.0, 0.0}) < 0) {
+        vex::this_thread::sleep_for(kQueuePollMs);
+    }
 }
 
 void XDrive::AutoRotateFor(double diff_deg, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::RotateFor, diff_deg, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::RotateFor, diff_deg, 0.0, speed, onDone, 0.0, 0.0}) < 0) {
+        vex::this_thread::sleep_for(kQueuePollMs);
+    }
 }
-
-

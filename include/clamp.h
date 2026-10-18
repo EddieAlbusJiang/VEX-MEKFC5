@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pid-controller.h"
+#include "auto-motion.h"
 #include "vex.h"
 
 // Geared clamp. A single motor drives a gear set that opens/closes the clamp.
@@ -22,16 +23,17 @@ class Clamp {
     double tolerance_ = P_CLAMP_TOLERANCE; // deadband (degrees)
     PIDController pid_;      // position loop, gains from P_CLAMP_PID_*
     bool locking_ = false;   // whether the compensation loop is active
+    volatile AutoResult auto_result_ = AutoResult::Idle;
 
     // Moves at constant speed toward open (+1) or close (-1); records the
     // position and stops (holds) at the corresponding limit.
     void moveBy(int direction);
 
-    // Blocking constant-speed move to a target angle (used by the Auto helpers).
-    void runToAngle(double target_deg, double speed);
+    // Native position move with arrival, stall, timeout and cancellation checks.
+    void runToAngle(double target_deg, double speed, bool loaded_grip = false);
 
     // ----- Non-blocking auto: command queue + worker thread -----
-    enum class AutoKind { To, For, Open, Close };
+    enum class AutoKind { To, For, Open, Close, Grip };
     struct AutoCmd {
         AutoKind kind;
         double a;
@@ -59,6 +61,10 @@ class Clamp {
     Clamp(vex::motor& motor, double open_angle, double close_angle, double speed);
 
     double position() const;
+    AutoResult autoResult() const { return auto_result_; }
+    // Wait for commands already queued; does not issue another movement.
+    AutoResult waitUntilDone();
+    // Endpoint status includes tolerance: larger angles open, smaller close.
     bool isOpen() const;
     bool isClosed() const;
 
@@ -81,10 +87,13 @@ class Clamp {
     void calibrateCloseAngle();
 
     // ----- Autonomous helpers (blocking; move to an angle, then hold) -----
-    void AutoClampTo(double target_deg, double speed = P_CLAMP_SPEED);
-    void AutoClampFor(double delta_deg, double speed = P_CLAMP_SPEED);
-    void AutoClampOpen(double speed = P_CLAMP_SPEED);
-    void AutoClampClose(double speed = P_CLAMP_SPEED);
+    AutoResult AutoClampTo(double target_deg, double speed = P_CLAMP_SPEED);
+    AutoResult AutoClampFor(double delta_deg, double speed = P_CLAMP_SPEED);
+    AutoResult AutoClampOpen(double speed = P_CLAMP_SPEED);
+    AutoResult AutoClampClose(double speed = P_CLAMP_SPEED);
+    // Loaded pickup: accept sustained contact only near the manual closed zero
+    // after substantial closing travel. Other automatic APIs remain strict.
+    AutoResult AutoClampGrip(double target_deg, double speed = P_CLAMP_SPEED);
 
     // ----- Non-blocking variants (enqueue and return; onDone may be null) -----
     void AutoClampTo(double target_deg, void (*onDone)(void), double speed = P_CLAMP_SPEED);

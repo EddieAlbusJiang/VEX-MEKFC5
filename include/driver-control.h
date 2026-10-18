@@ -18,6 +18,10 @@ void updateLift();
 // Reads the controller and commands the clamp (R2 close, R1 open).
 void updateClamp();
 
-// Writes telemetry (wheel speeds, mechanism angles, elapsed time) to the
-// Controller screen. Throttled internally.
+// Start one display-only worker after initialization. Keeps refreshing during
+// blocking autonomous routines, including a manual ROOT + B trigger.
+void startControllerTelemetry();
+
+// Writes telemetry (wheel commands, mechanism angles, position and elapsed
+// time since the display worker started). Called only by the display worker.
 void updateControllerScreen();

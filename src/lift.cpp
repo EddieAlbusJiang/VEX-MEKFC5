@@ -1,5 +1,7 @@
 #include "lift.h"
 #include "calc.h"
+#include "mechanism-motion.h"
+#include "HiDebug.h"
 #include "instance.h"
 
 #include <algorithm>
@@ -50,60 +52,53 @@ void Lift::resetPosition() { motors_.resetPosition(); }
 void Lift::setSpeed(double speed) { speed_ = std::max(0.0, std::min(speed, 100.0)); }
 
 void Lift::runToAngle(double target_deg, double speed) {
-    // Clamp the target within the reachable range.
+    const double requested_target = target_deg;
     target_deg = std::max(min_angle_, std::min(target_deg, max_angle_));
-
-    const double prev_speed = speed_;
-    setSpeed(speed);
-
+    speed = std::max(0.0, std::min(speed, 100.0));
     vex::timer timer;
-    vex::timer settle;
-    bool holding = false;
-    while (timer.time() < P_MECH_TIMEOUT_MS) {
-        const double pos = position();
-        const double err = target_deg - pos;
-        const double mag = std::fabs(err);
-
-        if (mag <= P_LIFT_TOL) {
-            holding = true;
-            motors_.stop(vex::brakeType::hold);
-            if (settle.time() >= P_MECH_SETTLE_MS) {
-                break;
-            }
-        } else if (holding && mag <= P_LIFT_TOL + P_MECH_HYSTERESIS) {
-            // Within the hysteresis band while holding: stay put (no chatter).
-            motors_.stop(vex::brakeType::hold);
-        } else if ((err > 0.0 && pos >= max_angle_) || (err < 0.0 && pos <= min_angle_)) {
-            motors_.stop(vex::brakeType::hold); // blocked by a limit before reaching target
-            break;
-        } else {
-            holding = false;
-            settle.reset();
-            const double cmd = approachSpeed(speed_, err, P_MECH_DECEL_TOL, P_MECH_MIN_OUTPUT);
-            const double sign = (err > 0.0) ? 1.0 : -1.0;
-            motors_.spin(vex::directionType::fwd, sign * cmd, vex::velocityUnits::pct);
-        }
-        vex::this_thread::sleep_for(10);
-    }
-
-    motors_.stop(vex::brakeType::hold);
-    setSpeed(prev_speed);
+    auto_result_ = AutoResult::Running;
+    auto_result_ = runMechanismPosition(motors_, target_deg, speed,
+                                        P_LIFT_AUTO_TOL, P_LIFT_AUTO_TIMEOUT_MS);
+    const auto level = auto_result_ == AutoResult::Reached ?
+        Debug::LogLevel::Info : Debug::LogLevel::Warning;
+    Debug::Log("[Lift] " + std::string(autoResultName(auto_result_)) + " " +
+                   Debug::doubleToString(timer.time(), 0) + "ms", level);
+    Debug::Log("[Lift] req=" + Debug::doubleToString(requested_target, 1) +
+                   " T=" + Debug::doubleToString(target_deg, 1) +
+                   " Lt=" + Debug::doubleToString(position(), 1), level);
 }
 
-void Lift::AutoLiftTo(double target_deg, double speed) { blockingAuto(AutoKind::To, target_deg, speed); }
+AutoResult Lift::AutoLiftTo(double target_deg, double speed) { blockingAuto(AutoKind::To, target_deg, speed); return auto_result_; }
 
-void Lift::AutoLiftFor(double delta_deg, double speed) { blockingAuto(AutoKind::For, delta_deg, speed); }
+AutoResult Lift::AutoLiftFor(double delta_deg, double speed) { blockingAuto(AutoKind::For, delta_deg, speed); return auto_result_; }
 
-void Lift::AutoLiftUp(double speed) { blockingAuto(AutoKind::Up, 0.0, speed); }
+AutoResult Lift::AutoLiftUp(double speed) { blockingAuto(AutoKind::Up, 0.0, speed); return auto_result_; }
 
-void Lift::AutoLiftDown(double speed) { blockingAuto(AutoKind::Down, 0.0, speed); }
+AutoResult Lift::AutoLiftDown(double speed) { blockingAuto(AutoKind::Down, 0.0, speed); return auto_result_; }
 
 // ---------------------------------------------------------------------------
 // Auto command queue + worker thread (see x-drive.cpp for the same pattern).
 // Blocking overloads enqueue and wait (ticket); non-blocking overloads enqueue
-// (dropping when full) and return. NOTE: do NOT call a blocking Auto from
+// (waiting for queue space if full) and return. NOTE: do NOT call a blocking Auto from
 // inside a callback (deadlock).
 // ---------------------------------------------------------------------------
+
+bool Lift::autoDone() {
+    auto_queue_mutex_.lock();
+    const bool done = auto_completed_ >= auto_enqueued_;
+    auto_queue_mutex_.unlock();
+    return done;
+}
+
+AutoResult Lift::waitUntilDone() {
+    auto_queue_mutex_.lock();
+    const int ticket = auto_enqueued_;
+    auto_queue_mutex_.unlock();
+    while (auto_completed_ < ticket) {
+        vex::this_thread::sleep_for(10);
+    }
+    return auto_result_;
+}
 
 void Lift::workerTrampoline() { s_instance_->autoWorkerLoop(); }
 
@@ -190,20 +185,28 @@ void Lift::autoWorkerLoop() {
 
 void Lift::AutoLiftTo(double target_deg, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::To, target_deg, 0.0, speed, onDone}); // drop if full
+    while (enqueueAuto(AutoCmd{AutoKind::To, target_deg, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
 
 void Lift::AutoLiftFor(double delta_deg, void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::For, delta_deg, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::For, delta_deg, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
 
 void Lift::AutoLiftUp(void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::Up, 0.0, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::Up, 0.0, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
 
 void Lift::AutoLiftDown(void (*onDone)(void), double speed) {
     ensureAutoWorker();
-    enqueueAuto(AutoCmd{AutoKind::Down, 0.0, 0.0, speed, onDone});
+    while (enqueueAuto(AutoCmd{AutoKind::Down, 0.0, 0.0, speed, onDone}) < 0) {
+        vex::this_thread::sleep_for(10);
+    }
 }
