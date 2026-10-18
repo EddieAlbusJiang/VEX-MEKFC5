@@ -3,9 +3,8 @@
 <img src="https://img.shields.io/badge/build-preview-brightgreen?style=for-the-badge"/>&emsp;
 <img src="https://img.shields.io/badge/match-closed-blue?style=for-the-badge"/>
 </div>
-$_{By\space癫疯召唤师(MEKFC5)，感谢DeepSeek老师和GPT老师的支持}$
 
-&emsp;&emsp;适用于 2026 SJTU VEX 校内赛的竞赛机器人程序（C++）。机器人采用 **45° 斜置全向底盘（X-drive）**，搭载一个牵引式**升降机**一个**夹爪**，配有惯性传感器与里程计，支持手动驾驶（第一人称/第三人称）与自动位移/旋转、机构自动动作。
+&emsp;&emsp;适用于 2026 SJTU VEX 校内赛的竞赛机器人程序（C++）。机器人采用 **45° 斜置全向底盘（X-drive）**，搭载一个***牵引升降机**一个**夹爪**，配有惯性传感器，支持手动驾驶（第一人称/第三人称），支持自动位移/旋转、机构自动动作。
 
 ## 硬件与端口
 
@@ -53,7 +52,7 @@ MEKFC5/
 - `docs/autonomous.md` — 自动阶段接口
 - `docs/logging-io.md` — HiDebug 日志与 HiIO 屏幕输出
 - `docs/config-tuning.md` — 集中调参宏（`config.h`）
-- `docs/VexAPI-*.md` — VEX 官方 API 参考（外部资料，版权所有VEX官方，详见 [https://api.vex.com/v5/home/](https://api.vex.com/v5/home/)）
+- `docs/VexAPI-*.md` — VEX 官方 API 文档参考
 
 ## 关键约定
 
@@ -65,3 +64,8 @@ MEKFC5/
 ## 版本说明
 * **最新版`8510865`**: 自动化路线完整，控制机制更完善，人工操作性能良好，但未经过完整的人工代码审查，自动化阶段存在异常推出的风险。
 * **稳定版`c35df65`**: 经过人工代码审查、严格的鲁棒性测试和赛场实战，可稳定使用，人工操作性能良好，但自动化路线较为简单，并未实现全部赛场任务。
+
+## 开发团队与许可证信息
+&emsp;&emsp;本项目由癫疯召唤师(MEKFC5)团队开发。
+&emsp;&emsp;感谢 SJTU VEX 社团官方的支持，感谢DeepSeek老师和GPT老师的支持。
+&emsp;&emsp;本项目（不包含`docs/VexAPI-*.md`）遵循 MIT License 开源。VEX 官方 API 文档版权归 VEX 官方所有，文档原件见官网 [https://api.vex.com/v5/home/](https://api.vex.com/v5/home/)，版权信息见官网 [https://www.vexrobotics.com/copyright-notice](https://www.vexrobotics.com/copyright-notice)。
