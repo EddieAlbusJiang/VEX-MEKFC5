@@ -20,7 +20,7 @@ void initialize() {
     HiIO::BrainScreen::setBrain(Brain);
     Controller.Screen.clearScreen();
     // Brain.Screen.setFillColor()
-    Debug::Log("[Main] MEKFC5 AUTO V3 Starting Up", Debug::LogLevel::Info);
+    Debug::Log("[Main] MEKFC5 AUTO V3 PRE Starting Up", Debug::LogLevel::Info);
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Odom.calibrate()) {
         vex::this_thread::sleep_for(10);
@@ -61,7 +61,7 @@ void initialize() {
 }
 
 int main() {
-    printf("Hello MEKFC5 AUTO V3\r\n");
+    printf("Hello MEKFC5 AUTO V3-PRE\r\n");
     initialize();
 
     // Register the competition callbacks.

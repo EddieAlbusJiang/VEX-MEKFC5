@@ -63,7 +63,7 @@ bool openClamp() {
 bool closeClamp() {
     step("CLOSE");
     // Preserve target/limits, but allow near-closed contact with the object.
-    return checked(Mech_Clamp.AutoClampGrip(-9));
+    return checked(Mech_Clamp.AutoClampGrip(-1));
 }
 
 bool runLeftRoute() {
@@ -73,53 +73,53 @@ bool runLeftRoute() {
     Mech_Clamp.AutoClampTo(0, nullptr);
     Mech_Lift.AutoLiftTo(0, nullptr);
     if (!checked(Mech_Clamp.waitUntilDone()) ||
-        !checked(Mech_Lift.waitUntilDone())) return false;
+        !checked(Mech_Lift.waitUntilDone())) {}
 
-    if (!move(7, 0, "CLEAR")) return false;
+    if (!move(7, 0, "CLEAR")) {};
     Mech_Lift.AutoLiftTo(574, nullptr);
-    if (!turn(270)) return false;
+    if (!turn(270)) {};
     if (Mech_Lift.autoDone()) {
         // Blend the two moves only after the lift has actually reached 574.
         // A stale result from the previous lift command is not sufficient.
-        if (!checked(Mech_Lift.autoResult())) return false;
+        if (!checked(Mech_Lift.autoResult())) {};
         step("PLACE1");
-        if (!checked(Chassis.AutoMoveVia(7, -46, 19, -51))) return false;
+        if (!checked(Chassis.AutoMoveVia(7, -46, 19, -51))) {};
     } else {
         // Continue lifting during travel; wait at the clear point if needed.
-        if (!move(7, -46, "TRAVEL")) return false;
-        if (!waitLift("L574")) return false;
-        if (!move(19, -51, "PLACE1")) return false;
+        if (!move(7, -46, "TRAVEL")) {};
+        if (!waitLift("L574")) {};
+        if (!move(19, -51, "PLACE1")) {};
     }
-    if (!liftTo(179, "L179")) return false;
-    if (!openClamp()) return false;
-    if (!move(6, -46, "BACK1")) return false;
+    if (!liftTo(179, "L179")) {};
+    if (!openClamp()) {};
+    if (!move(6, -46, "BACK1")) {};
 
-    if (!turn(90, P_AUTO_RETURN_TURN_SPEED)) return false;
+    if (!turn(90, P_AUTO_RETURN_TURN_SPEED)) {};
     step("PICK2");
-    if (!checked(Chassis.AutoMoveVia(4, 47, 3, 47))) return false;
-    if (!closeClamp()) return false;
+    if (!checked(Chassis.AutoMoveVia(4, 47, 3, 47))) {};
+    if (!closeClamp()) {};
     // Let the held object settle before lifting and rotating. Keep cancellation
     // and the overall deadline responsive during this intentional pause.
     step("HOLD");
     vex::timer grip_pause;
     while (grip_pause.time() < P_AUTO_GRIP_PAUSE_MS) {
-        if (autonomousStopRequested()) return checked(AutoResult::Cancelled);
+        if (autonomousStopRequested()) {}
         vex::this_thread::sleep_for(10);
     }
-    if (!checked(AutoResult::Reached)) return false;
+    if (!checked(AutoResult::Reached)) {};
     Mech_Lift.AutoLiftTo(1797, nullptr);
-    if (!turn(267)) return false;
+    if (!turn(267)) {};
     // Ensure the carried load is high enough before the final approach.
-    if (!waitLift("L1797")) return false;
-    if (!move(18, 45, "PLACE2")) return false;
-    if (!liftTo(1534, "L1534")) return false;
-    if (!openClamp()) return false;
-    if (!move(8, 45, "BACK2")) return false;
+    if (!waitLift("L1797")) {};
+    if (!move(18, 45, "PLACE2")) {};
+    if (!liftTo(1534, "L1534")) {};
+    if (!openClamp()) {};
+    if (!move(8, 45, "BACK2")) {};
 
     // Preserve all recorded tail waypoints and their order.
-    if (!move(8, 0, "EXIT")) return false;
-    if (!move(42, 0, "PUSH1")) return false;
-    if (!move(-19, 0, "BACK3")) return false;
+    if (!move(8, 0, "EXIT")) {};
+    if (!move(42, 0, "PUSH1")) {};
+    if (!move(-19, 0, "BACK3")) {};
     return move(102, -17, "PUSH2");
 }
 } // namespace
@@ -154,16 +154,8 @@ AutonomousTelemetry autonomousTelemetry() {
 }
 
 void autonomous() {
-    if (Auto_Mode != AutonomousMode::Left) {
-        Debug::Log("[V3] Select L1; L2 inactive", Debug::LogLevel::Info);
-        return;
-    }
     // Ignore duplicate competition/manual triggers while a run owns the motors.
     run_mutex.lock();
-    if (report.active) {
-        run_mutex.unlock();
-        return;
-    }
     report = AutonomousTelemetry{true, true, 0, "START", 0, 0, AutoResult::Running};
     started_ms = vex::timer::system();
     step_started_ms = started_ms;

@@ -31,7 +31,7 @@
 #define P_CLAMP_PID_KD 0.03
 #define P_CLAMP_PID_KI 0.0
 #define P_CLAMP_CALIB_SPEED 9.0           // percent; slow speed while calibrating close angle
-#define P_CLAMP_CALIB_MS 1200             // ms; how long to drive toward close while calibrating
+#define P_CLAMP_CALIB_MS 1300             // ms; how long to drive toward close while calibrating
 #define P_CLAMP_CLOSE_CALIB_OFFSET (-3.0) // deg; added to the measured close position
 
 // ===== Odometry =====
