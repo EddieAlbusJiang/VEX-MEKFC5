@@ -10,14 +10,14 @@ namespace {
 constexpr double kDeadZone = 2.0;
 // Screen refresh period (ms). The screen updates over I2C, so throttle it.
 constexpr int kScreenRefreshMs = 150;
-// Time since driverControl() started; reset on entry.
+// Time since the telemetry worker started; owned by that worker.
 vex::timer control_timer;
 // Screen-refresh throttle base; reset together with control_timer on entry.
 int last_refresh_ms = -kScreenRefreshMs;
 // Singleton guard: only one driverControl loop may run (main's direct call vs
 // the Competition drivercontrol callback).
 vex::mutex driver_guard_mutex;
-bool driver_running = false;
+unsigned driver_generation = 0;
 
 // Drive reference frame.
 //   HeadingUp (mode 1): joystick forward follows the robot's current heading.
@@ -57,6 +57,7 @@ void onAxisLockToggle() {
 }
 
 void onModeToggle() {
+    if (Auto_Active) return;
     drive_mode_mutex.lock();
     drive_mode = (drive_mode == DriveMode::HeadingUp) ? DriveMode::NorthUp : DriveMode::HeadingUp;
     heading_reset_requested = true;// Automatically Reset Heading.
@@ -64,6 +65,7 @@ void onModeToggle() {
 }
 
 void onHeadingReset() {
+    if (Auto_Active) return;
     // Defer the sensor call to the control loop to avoid touching the inertial
     // sensor from the callback thread.
     drive_mode_mutex.lock();
@@ -82,7 +84,11 @@ void serviceHeadingReset() {
 }
 
 void onRunAutonomous() {
-    if (!Root_Mode || Auto_Active) {
+    if (Auto_Active) {
+        requestAutonomousStop();
+        return;
+    }
+    if (!Root_Mode) {
         return; // manual autonomous trigger is only available in Root mode
     }
     drive_mode_mutex.lock();
@@ -99,6 +105,7 @@ bool consumeRunAutonomous() {
 }
 
 void onRootToggle() {
+    if (Auto_Active) return;
     drive_mode_mutex.lock();
     root_toggle_requested = true;
     drive_mode_mutex.unlock();
@@ -125,7 +132,7 @@ void serviceRootToggle() {
 }
 
 void onResetPosition() {
-    if (!Root_Mode) {
+    if (!Root_Mode || Auto_Active) {
         return; // position reset is only available in Root mode
     }
     drive_mode_mutex.lock();
@@ -146,18 +153,13 @@ void serviceResetPosition() {
 } // namespace
 
 void driverControl() {
-    // Only one driverControl loop may run.
-    // driver_guard_mutex.lock();
-    // if (driver_running) {
-    //     driver_guard_mutex.unlock();
-    //     return;
-    // }
-    // driver_running = true;
-    // driver_guard_mutex.unlock();
+    // New competition callbacks supersede older loops, even if the previous
+    // callback was stopped externally. Do not leave a permanent running latch.
+    driver_guard_mutex.lock();
+    const unsigned generation = ++driver_generation;
+    driver_guard_mutex.unlock();
 
     Debug::Log("[DriverControl] Manual Control Override.\n", Debug::LogLevel::Debug);
-    control_timer.reset();
-    last_refresh_ms = -kScreenRefreshMs;
 
     // Register the drive-mode and heading-reset button callbacks once.
     static bool callbacks_registered = false;
@@ -173,13 +175,17 @@ void driverControl() {
 
     // Keep running while the driver control period is active.
     while (true) {
+        driver_guard_mutex.lock();
+        const bool current = generation == driver_generation;
+        driver_guard_mutex.unlock();
+        if (!current) return;
         // Debug: run the autonomous routine once when requested (Button B).
         if (consumeRunAutonomous() && !Auto_Active) {
             autonomous();
         }
 
         // While the autonomous routine runs, do not command the hardware (it
-        // would fight the autonomous routine); keep the screen updated only.
+        // would fight the autonomous routine). Telemetry runs independently.
         if (!Auto_Active) {
             serviceHeadingReset();
             serviceRootToggle();
@@ -188,8 +194,6 @@ void driverControl() {
             updateLift();
             updateClamp();
         }
-        updateControllerScreen();
-
         vex::this_thread::sleep_for(10);
     }
 }
@@ -299,14 +303,49 @@ void updateControllerScreen() {
     const int y = clamp4(Odom.wheelY());
     const char axis_char = getAxisLock() ? 'A' : ' ';
     const char mode_char = (getDriveMode() == DriveMode::NorthUp) ? 'Y' : 'X';
-    const char* label = Root_Mode ? "ROOT" : "Man ";
+    const char* label = Auto_Active ? "AUTO" : (Root_Mode ? "ROOT" : "Man ");
     snprintf(row3, sizeof(row3), "%s%4d,%4d %c%c%03d", label, x, y, axis_char, mode_char, seconds);
+
+    // Keep the last run summary visible: the operator need not find a terminal
+    // log to see which action stalled or how long the autonomous run took.
+    const AutonomousTelemetry auto_status = autonomousTelemetry();
+    if (auto_status.has_run) {
+        if (auto_status.active) {
+            snprintf(row1, sizeof(row1), "V3 %02u %-5.5s %4.1fs",
+                     auto_status.step, auto_status.action, auto_status.elapsed_ms / 1000.0);
+        } else {
+            snprintf(row1, sizeof(row1), "V3 %-7.7s %5.1fs",
+                     auto_status.result == AutoResult::Reached ? "DONE" :
+                         autoResultName(auto_status.result), auto_status.elapsed_ms / 1000.0);
+        }
+        if (auto_status.active) {
+            snprintf(row3, sizeof(row3), "%3.1fs X%4d Y%4d ",
+                     auto_status.step_elapsed_ms / 1000.0, x, y);
+        } else {
+            snprintf(row3, sizeof(row3), "S%02u %-5.5s %5.1fs  ",
+                     auto_status.step, auto_status.action,
+                     auto_status.step_elapsed_ms / 1000.0);
+        }
+    }
                                   
     // Fixed-width fields overwrite the previous frame, so no clear is needed.
     Controller.Screen.setCursor(1, 1);
-    Controller.Screen.print("%s", row1);
+    Controller.Screen.print("%-19s", row1);
     Controller.Screen.setCursor(2, 1);
-    Controller.Screen.print("%s", row2);
+    Controller.Screen.print("%-19s", row2);
     Controller.Screen.setCursor(3, 1);
-    Controller.Screen.print("%s", row3);
+    Controller.Screen.print("%-19s", row3);
+}
+
+void startControllerTelemetry() {
+    // Started once from initialize(), outside competition callbacks. This
+    // thread only reads telemetry and writes the display; it never drives motors.
+    static vex::thread screen_task([]() {
+        control_timer.reset();
+        last_refresh_ms = -kScreenRefreshMs;
+        while (true) {
+            updateControllerScreen();
+            vex::this_thread::sleep_for(10);
+        }
+    });
 }

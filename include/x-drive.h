@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vex.h"
+#include "auto-motion.h"
 
 class Odometry;
 
@@ -26,7 +27,8 @@ class XDrive {
     double lateral_gain_;
     double rotational_gain_;
 
-    // Global output cap (0..1) applied after normalization (see P_XDRIVE_MAX_OUTPUT).
+    // Base output cap (0..1), used for manual drive, turns and close approaches.
+    // Automatic translation blends toward its transit cap away from a target.
     double max_output_ = P_XDRIVE_MAX_OUTPUT;
 
     // Idle-brake configuration. When a wheel's final output stays below
@@ -44,25 +46,31 @@ class XDrive {
     // Whether the drive is effectively braked/stationary (all wheel speeds ~0).
     // Read from other threads, so kept volatile.
     volatile bool braking_ = true;
+    volatile AutoResult auto_result_ = AutoResult::Idle;
 
     // Applies the idle-brake logic to a single motor and returns the effective
     // value applied (zero when held/stopped).
     double applyMotor(vex::motor& motor, bool& held, double output);
+    void driveWithLimit(double forward, double lateral, double rotational, double output_limit);
 
     // Blocking auto routines. Targets are in the odometry (power-up) frame.
-    void runMove(double target_x, double target_y, double speed);
+    void runMove(double target_x, double target_y, double speed, bool pass_through = false,
+                 double tolerance = P_AUTO_POS_TOL);
+    void runMoveVia(double via_x, double via_y, double target_x, double target_y, double speed);
     void runRotate(double target_deg, double speed);
     // Fast move: full (allowed) speed toward a world-frame relative offset, no PID.
     void runFastMove(double delta_x, double delta_y);
 
     // ----- Non-blocking auto: command queue + worker thread -----
-    enum class AutoKind { MoveTo, MoveFor, RotateTo, RotateFor, FastFor };
+    enum class AutoKind { MoveTo, MoveFor, RotateTo, RotateFor, FastFor, MoveVia };
     struct AutoCmd {
         AutoKind kind;
         double a;
         double b;
         double speed;
         void (*cb)(void);
+        double c;
+        double d;
     };
     static constexpr int kQueueSize = P_AUTO_QUEUE;
     AutoCmd auto_queue_[kQueueSize];
@@ -78,7 +86,8 @@ class XDrive {
     void ensureAutoWorker();
     void autoWorkerLoop();
     int enqueueAuto(const AutoCmd& cmd); // ticket >=0, or -1 if full
-    void blockingAuto(AutoKind kind, double a, double b, double speed);
+    void blockingAuto(AutoKind kind, double a, double b, double speed,
+                      double c = 0.0, double d = 0.0);
     static void workerTrampoline();
 
   public:
@@ -94,7 +103,7 @@ class XDrive {
     // Set the hold threshold (percent) and the hysteresis margin used to resume.
     void setOutputInf(double min_output, double hysteresis = 1.0);
 
-    // Set the global output cap (0..1), clamped to a sane range.
+    // Set the base output cap (0..1). Auto translation also uses its transit cap.
     void setOutputSup(double max_output);
 
     // The effective output last applied to a wheel: index 0..3 => l1, l2, r1, r2.
@@ -103,6 +112,8 @@ class XDrive {
 
     // True when all four wheels are effectively stopped (braked/stationary).
     bool isBraking() const;
+    AutoResult autoResult() const { return auto_result_; }
+    AutoResult waitUntilDone();
 
     // Command the chassis. Inputs are in percent (-100..100). The combined
     // wheel outputs are scaled proportionally so no wheel saturates, preserving
@@ -114,14 +125,18 @@ class XDrive {
 
     // ----- Autonomous helpers (blocking; drive to a target, then hold) -----
     // Targets/offsets are in the odometry frame (origin = power-up position).
-    void AutoMoveTo(double target_x, double target_y, double speed = P_AUTO_SPEED);
-    void AutoMoveFor(double diff_x, double diff_y, double speed = P_AUTO_SPEED);
-    void AutoRotateTo(double target_deg, double speed = P_AUTO_SPEED);
-    void AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
+    AutoResult AutoMoveTo(double target_x, double target_y, double speed = P_AUTO_SPEED);
+    // One worker command: pass within position tolerance of the via point
+    // without stopping, then stop/settle at the final target. Failure stops both.
+    AutoResult AutoMoveVia(double via_x, double via_y, double target_x, double target_y,
+                           double speed = P_AUTO_SPEED);
+    AutoResult AutoMoveFor(double diff_x, double diff_y, double speed = P_AUTO_SPEED);
+    AutoResult AutoRotateTo(double target_deg, double speed = P_AUTO_SPEED);
+    AutoResult AutoRotateFor(double diff_deg, double speed = P_AUTO_SPEED);
 
     // Special fast move: world-frame relative offset at the maximum allowed
     // speed, no PID / no deceleration / no heading hold (blocking).
-    void AutoFastMoveFor(double diff_x, double diff_y);
+    AutoResult AutoFastMoveFor(double diff_x, double diff_y);
 
     // ----- Non-blocking variants: enqueue and return; onDone (may be null)
     //       is called from the worker thread when the action completes. -----

@@ -2,103 +2,197 @@
 #include "HiDebug.h"
 #include "instance.h"
 
-void autonomous() {
-    Debug::Log("[Auto] start", Debug::LogLevel::Info);
-    Controller.Screen.clearScreen();
-    Controller.Screen.setCursor(2, 1);
-    Controller.Screen.print("Autonomous Override");
-    
-    vex::timer timer;
-    // Mark the autonomous phase so driverControl() stops commanding hardware.
-    Auto_Active = true;
-    // Zero the chassis pose and heading so the routine's absolute targets are
-    // relative to the start of this autonomous run.
-    Odom.resetRotation();
-    // Odom.resetImu();
-    Odom.resetWheel();
-    // Per-wheel idle-brake distorts holonomic motion, so disable it for the
-    // whole autonomous routine and restore it at the end.
-    Chassis.setIdleBrake(false);
+volatile AutonomousMode Auto_Mode = AutonomousMode::Right;
 
-    // Placeholder autonomous routine. Example calls (currently not executed):
-    //   Chassis.AutoMoveTo(50.0, 0.0);      // move to (x=50, y=0) cm
-    //   Chassis.AutoRotateTo(90.0);         // rotate to heading 90 deg
-    //   Chassis.AutoMoveFor(-50.0, 0.0);    // relative move
-    //   Chassis.AutoRotateFor(-90.0);       // relative rotate
+namespace {
+vex::mutex run_mutex;
+AutonomousTelemetry report{false, false, 0, "READY", 0, 0, AutoResult::Idle};
+unsigned started_ms = 0;
+unsigned step_started_ms = 0;
+bool cancel_requested = false;
+bool deadline_expired = false;
 
-    // First Stage
-    // Mech_Clamp.AutoClampOpen();
-    // Chassis.AutoMoveTo(0.0, -9.0);          // Clear Point
-    // Chassis.AutoMoveTo(47.0, -9.0);         // Pin 1
-    // Chassis.AutoMoveTo(47.0, -1.0);          // Approach
-    // Mech_Clamp.AutoClampClose();
-    // Mech_Lift.AutoLiftTo(1812, nullptr);
-    // Chassis.AutoRotateTo(-90.0);
-    // // Chassis.AutoMoveTo(47.0, -6.0);  //deserted
-    // Chassis.AutoMoveTo(17.0, -9.0); 
-    // Chassis.AutoMoveTo(34.0, -30.0);
-    // Mech_Clamp.AutoClampOpen();
+void step(const char* action) {
+    run_mutex.lock();
+    ++report.step;
+    report.action = action;
+    step_started_ms = vex::timer::system();
+    report.step_elapsed_ms = 0;
+    const unsigned number = report.step;
+    run_mutex.unlock();
+    Debug::Log("[V3 S" + Debug::doubleToString(number, 0) + "] " + action,
+               Debug::LogLevel::Info);
+}
 
-    // First Stage Optimized        // -3
-    Mech_Clamp.AutoClampOpen();
-    Mech_Lift.AutoLiftTo(30, nullptr);
-    Chassis.AutoMoveTo(0.0, -9.0);          // Clear Point
-    Chassis.AutoMoveTo(48, -9.0);         // Pin 1
-    Chassis.AutoMoveTo(48, -1.5);          // Approach
-    Mech_Clamp.AutoClampClose();
-    Mech_Lift.AutoLiftTo(1812, nullptr);
-    Chassis.AutoRotateTo(-180, 45);
-    Chassis.AutoMoveTo(48, -17);
-    Mech_Clamp.AutoClampOpen();
-    Chassis.AutoMoveTo(48, -14);
+bool checked(AutoResult result) {
+    const bool cancelled = autonomousStopRequested();
+    if (result == AutoResult::Reached && !cancelled) return true;
+    run_mutex.lock();
+    report.result = deadline_expired ? AutoResult::Timeout :
+        (cancelled ? AutoResult::Cancelled : result);
+    cancel_requested = true;
+    run_mutex.unlock();
+    return false;
+}
 
-    // Second Stage
-    // Chassis.AutoMoveTo(4, -28);             // Clear Point
-    // Chassis.AutoRotateTo(0);
-    // Chassis.AutoMoveTo(-40, -2);             // Pin 2
-    // Chassis.AutoMoveTo(-40, 7);            // Approach
-    // Mech_Lift.AutoLiftFor(0); 
-    // Mech_Clamp.AutoClampClose();
-    // Mech_Lift.AutoLiftTo(1812, nullptr);
-    // Chassis.AutoMoveTo(-40, -5);
-    // Chassis.AutoRotateTo(-180);
-    // Mech_Clamp.AutoClampOpen();
+bool move(double x, double y, const char* name) {
+    step(name);
+    return checked(Chassis.AutoMoveTo(x, y));
+}
 
-    // Second Stage Optimized
-    // Mech_Lift.AutoLiftTo(30, nullptr);
-    // Chassis.AutoMoveTo(-47.0, -14.0);
-    // Chassis.AutoMoveTo(-54.0, -13.0);
-    // Chassis.AutoRotateTo(0);
-    // Chassis.AutoMoveTo(-54.0, -11.0);
-    // Mech_Clamp.AutoClampClose();
-    // Mech_Lift.AutoLiftTo(1812, nullptr);
-    // Chassis.AutoRotateTo(-180, 45);
-    // Chassis.AutoMoveTo(-54.0, -20);
-    // Mech_Clamp.AutoClampOpen();
-    
-    // Third Stage Optimized (Not Toggling yet)
-    // Chassis.AutoMoveTo(-40.0, -6);
-    // Mech_Lift.AutoLiftTo(1812, nullptr);
-    // Chassis.AutoMoveTo(0, 2);
-    // Chassis.AutoRotateTo(0);
+bool turn(double heading, double speed = 45) {
+    step("TURN");
+    return checked(Chassis.AutoRotateTo(heading, speed));
+}
 
+bool liftTo(double height, const char* name) {
+    step(name);
+    return checked(Mech_Lift.AutoLiftTo(height));
+}
+
+bool waitLift(const char* name) {
+    step(name);
+    return checked(Mech_Lift.waitUntilDone());
+}
+
+bool openClamp() {
+    step("OPEN");
+    return checked(Mech_Clamp.AutoClampTo(90));
+}
+
+bool closeClamp() {
+    step("CLOSE");
+    // Preserve target/limits, but allow near-closed contact with the object.
+    return checked(Mech_Clamp.AutoClampGrip(-1));
+}
+
+bool runLeftRoute() {
+    // Startup mechanisms overlap; grip and low position must finish before drive.
+    step("START");
+    // Keep the team's manual zero reference; do not establish a new zero here.
+    Mech_Clamp.AutoClampTo(0, nullptr);
     Mech_Lift.AutoLiftTo(0, nullptr);
-    Chassis.AutoMoveTo(0, -14.0);
-    Chassis.AutoRotateTo(-180);
-    // Chassis.AutoMoveFor(0, 2.0);
-    Chassis.AutoMoveTo(-10, -80.0);
-    Chassis.AutoFastMoveFor(0, 105);
-    Chassis.AutoFastMoveFor(0, -72);
-    Chassis.AutoMoveFor(-30, -40);
-    // Chassis.AutoFastMoveFor(0, -20);
-    // Chassis.AutoFastMoveFor(0, 20);
-    // Chassis.AutoFastMoveFor(0, -20);
+    if (!checked(Mech_Clamp.waitUntilDone()) ||
+        !checked(Mech_Lift.waitUntilDone())) {}
 
+    if (!move(7, 0, "CLEAR")) {};
+    Mech_Lift.AutoLiftTo(574, nullptr);
+    if (!turn(270)) {};
+    if (Mech_Lift.autoDone()) {
+        // Blend the two moves only after the lift has actually reached 574.
+        // A stale result from the previous lift command is not sufficient.
+        if (!checked(Mech_Lift.autoResult())) {};
+        step("PLACE1");
+        if (!checked(Chassis.AutoMoveVia(7, -46, 19, -51))) {};
+    } else {
+        // Continue lifting during travel; wait at the clear point if needed.
+        if (!move(7, -46, "TRAVEL")) {};
+        if (!waitLift("L574")) {};
+        if (!move(19, -51, "PLACE1")) {};
+    }
+    if (!liftTo(179, "L179")) {};
+    if (!openClamp()) {};
+    if (!move(6, -46, "BACK1")) {};
 
+    if (!turn(90, P_AUTO_RETURN_TURN_SPEED)) {};
+    step("PICK2");
+    if (!checked(Chassis.AutoMoveVia(4, 47, 3, 47))) {};
+    if (!closeClamp()) {};
+    // Let the held object settle before lifting and rotating. Keep cancellation
+    // and the overall deadline responsive during this intentional pause.
+    step("Last failure point");
+    if (!checked(AutoResult::Reached)) {};
+    Mech_Lift.AutoLiftTo(1797, nullptr);
+    if (!turn(267)) {};
+    // Ensure the carried load is high enough before the final approach.
+    if (!waitLift("L1797")) {};
+    if (!move(18, 45, "PLACE2")) {};
+    if (!liftTo(1534, "L1534")) {};
+    if (!openClamp()) {};
+    if (!move(8, 45, "BACK2")) {};
 
-    printf(" [AUTON] Time: %dms\n", timer.time());
+    // Preserve all recorded tail waypoints and their order.
+    if (!move(8, 0, "EXIT")) {};
+    if (!move(42, 0, "PUSH1")) {};
+    if (!move(-19, 0, "BACK3")) {};
+    return move(102, -17, "PUSH2");
+}
+} // namespace
+
+bool autonomousStopRequested() {
+    run_mutex.lock();
+    if (report.active && vex::timer::system() - started_ms >= P_AUTO_RUN_LIMIT_MS) {
+        deadline_expired = true;
+        cancel_requested = true;
+    }
+    const bool stop = report.active && cancel_requested;
+    run_mutex.unlock();
+    return stop;
+}
+
+void requestAutonomousStop() {
+    run_mutex.lock();
+    if (report.active) cancel_requested = true;
+    run_mutex.unlock();
+}
+
+AutonomousTelemetry autonomousTelemetry() {
+    run_mutex.lock();
+    AutonomousTelemetry snapshot = report;
+    if (snapshot.active) {
+        const unsigned now = vex::timer::system();
+        snapshot.elapsed_ms = now - started_ms;
+        snapshot.step_elapsed_ms = now - step_started_ms;
+    }
+    run_mutex.unlock();
+    return snapshot;
+}
+
+void autonomous() {
+    // Ignore duplicate competition/manual triggers while a run owns the motors.
+    run_mutex.lock();
+    report = AutonomousTelemetry{true, true, 0, "START", 0, 0, AutoResult::Running};
+    started_ms = vex::timer::system();
+    step_started_ms = started_ms;
+    cancel_requested = false;
+    deadline_expired = false;
+    Auto_Active = true;
+    run_mutex.unlock();
+
+    Debug::Log("[AUTO V3] START L1 / 30s", Debug::LogLevel::Info);
+    Odom.resetRotation();
+    Odom.resetWheel();
+    Chassis.setIdleBrake(false);
+    const bool completed = runLeftRoute();
+
+    // On failure/deadline, drain cancelled background commands before handing
+    // hardware back to manual control. A 30s cutoff is never reported as DONE.
+    const bool stop_requested = autonomousStopRequested();
+    run_mutex.lock();
+    const bool success = completed && !stop_requested;
+    if (!success && report.result == AutoResult::Running) {
+        report.result = deadline_expired ? AutoResult::Timeout : AutoResult::Cancelled;
+    }
+    cancel_requested = true;
+    run_mutex.unlock();
+    Mech_Lift.waitUntilDone();
+    Mech_Clamp.waitUntilDone();
+    Chassis.waitUntilDone();
+    Chassis.stop(vex::brakeType::hold);
+    Mech_Lift.stop();
+    Motor_Clamp.stop(vex::brakeType::hold);
     Chassis.setIdleBrake(true);
+
+    run_mutex.lock();
+    report.elapsed_ms = vex::timer::system() - started_ms;
+    report.step_elapsed_ms = vex::timer::system() - step_started_ms;
+    report.active = false;
+    if (success) report.result = AutoResult::Reached;
+    const AutonomousTelemetry finished = report;
     Auto_Active = false;
-    Controller.Screen.clearScreen();
-    Debug::Log("[Auto] done", Debug::LogLevel::Info);
+    run_mutex.unlock();
+    Debug::Log("[AUTO V3] " + std::string(success ? "DONE" : "STOP") + " " +
+                   Debug::doubleToString(finished.elapsed_ms / 1000.0, 2) + "s S" +
+                   Debug::doubleToString(finished.step, 0) + " " + autoResultName(finished.result),
+               success ? Debug::LogLevel::Info : Debug::LogLevel::Warning);
 }

@@ -33,7 +33,8 @@ enum class LogLevel : int {
     Critical,
     Fatal
 };
-// Unified logging entry point.
+// Enqueue for ordered background output; screen/USB I/O never blocks the caller.
+// If the bounded queue fills, oldest entries are dropped with a warning.
 // Output format: [<Level>]<Content>\n  (e.g. "[W]High Velocity")
 // levelTag: Debug->D, Info->I, Warning->W, Critical->C, Fatal->F
 void Log(const std::string& content, LogLevel level); 

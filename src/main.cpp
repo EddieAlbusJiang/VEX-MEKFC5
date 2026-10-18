@@ -20,7 +20,7 @@ void initialize() {
     HiIO::BrainScreen::setBrain(Brain);
     Controller.Screen.clearScreen();
     // Brain.Screen.setFillColor()
-    Debug::Log("[Main] MEKFC5 v0.33-beta Starting Up...", Debug::LogLevel::Info);
+    Debug::Log("[Main] MEKFC5 AUTO V3 PRE Starting Up", Debug::LogLevel::Info);
     // Calibrate the inertial sensor until it reports a stable reading.
     while (!Odom.calibrate()) {
         vex::this_thread::sleep_for(10);
@@ -40,13 +40,28 @@ void initialize() {
     Mech_Lift.resetPosition();
     Mech_Clamp.assumeOpen();          // establish reference: open = open_angle
     Mech_Clamp.calibrateCloseAngle(); // boot calibration of the close angle
+    //
+
     Debug::Log("[Main] Initialized.", Debug::LogLevel::Info);
+    // L2 remains the default but is inactive during the stage-one test.
+    Auto_Mode = AutonomousMode::Right;
+    Controller.ButtonL2.pressed([]() {
+        Auto_Mode = AutonomousMode::Right;
+        Debug::Log("[Auto] Selected L2 (inactive).", Debug::LogLevel::Info);
+    });
+    Controller.ButtonL1.pressed([]() {
+        Auto_Mode = AutonomousMode::Left;
+        Debug::Log("[V3] Selected L1 / 30s", Debug::LogLevel::Info);
+    });
+    Debug::Log("[V3] L2 inactive. Select L1.", Debug::LogLevel::Info);
     Controller.Screen.setCursor(1, 1);
     Controller.Screen.print("Hi Summoner!");
+    startControllerTelemetry();
+
 }
 
 int main() {
-    printf("Hello MEKFC5 v0.33-beta\r\n");
+    printf("Hello MEKFC5 AUTO V3-PRE\r\n");
     initialize();
 
     // Register the competition callbacks.
