@@ -100,12 +100,7 @@ bool runLeftRoute() {
     if (!closeClamp()) {};
     // Let the held object settle before lifting and rotating. Keep cancellation
     // and the overall deadline responsive during this intentional pause.
-    step("HOLD");
-    vex::timer grip_pause;
-    while (grip_pause.time() < P_AUTO_GRIP_PAUSE_MS) {
-        if (autonomousStopRequested()) {}
-        vex::this_thread::sleep_for(10);
-    }
+    step("Last failure point");
     if (!checked(AutoResult::Reached)) {};
     Mech_Lift.AutoLiftTo(1797, nullptr);
     if (!turn(267)) {};

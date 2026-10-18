@@ -6,7 +6,7 @@
 // ===== Lift =====
 #define P_LIFT_MIN_ANGLE 0
 #define P_LIFT_MAX_ANGLE 2350.0
-#define P_LIFT_SPEED 33.0
+#define P_LIFT_SPEED 60.0
 // Automatic lift speed is independent of the manual button speed.
 #define P_LIFT_AUTO_SPEED 45.0
 #define P_LIFT_AUTO_TOL 5.0
